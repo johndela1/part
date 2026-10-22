@@ -17,7 +17,8 @@ const (
 	senderMail = "john@jjdev.com"
 )
 
-var to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
+// var to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
+var to = []string{"john@jjdev.com"}
 var senderPass string = os.Getenv("SMTPPASS")
 
 type Nipple struct {
@@ -33,7 +34,8 @@ type Pipe struct {
 	Quantity      int    `form:"input,number" label:"Quantity" required:"true"`
 }
 
-func pipe(w http.ResponseWriter, r *http.Request) {
+func (o order) pipe(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("pipe", r.RemoteAddr)
 	var part Pipe
 	if r.Method == http.MethodPost {
 		if err := form.MapForm(r, &part); err != nil {
@@ -41,7 +43,7 @@ func pipe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fmt.Printf("%+v\n", part)
-		msg := fmt.Sprintf("Subject: Order Alert\n\nPart name: pipe  Qty: %v\n, thickness type: %v\ncoating type: %v\nend type: %v\nsize: %v\n", part.Quantity, part.ThicknessType, part.CoatingType, part.EndType, part.Size)
+		msg := fmt.Sprintf("subject: order alert\n\npart name: pipe  Qty: %v\n, thickness type: %v\ncoating type: %v\nend type: %v\nsize: %v\n", part.Quantity, part.ThicknessType, part.CoatingType, part.EndType, part.Size)
 		auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
 		err := smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte(msg))
 		if err != nil {
@@ -88,7 +90,17 @@ func pipe(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 }
-func nipple(w http.ResponseWriter, r *http.Request) {
+
+
+type order struct {
+	items []string
+}
+
+func (o order) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("success")
+}
+func (o order) nipple(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("nipple", r.RemoteAddr)
 	var part Nipple
 
 	if r.Method == http.MethodPost {
@@ -117,11 +129,15 @@ func nipple(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 }
-func main() {
 
-	http.HandleFunc("/nipple", nipple)
-	http.HandleFunc("/pipe", pipe)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+
+func main() {
+	order := order{}
+	mux := http.NewServeMux()
+	mux.Handle("/nipple", http.HandlerFunc(order.nipple))
+	mux.Handle("/pipe", http.HandlerFunc(order.pipe))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("index", r.RemoteAddr)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `
 			<!DOCTYPE html>
@@ -134,6 +150,6 @@ func main() {
 			</body>
 			</html>
 		`)
-	})
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	}))
+	log.Fatal(http.ListenAndServe(":8080", mux))
 }
