@@ -17,8 +17,9 @@ const (
 	senderMail = "john@jjdev.com"
 )
 
-// var to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
-var to = []string{"john@jjdev.com"}
+var to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
+
+// var to = []string{"john@jjdev.com"}
 var senderPass string = os.Getenv("SMTPPASS")
 
 func (o order) sendMail(msg string, w http.ResponseWriter) error {
@@ -67,14 +68,14 @@ type Pipe struct {
 }
 
 func (o order) pipe(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("pipe", r.RemoteAddr)
+	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	var part Pipe
 	if r.Method == http.MethodPost {
 		if err := form.MapForm(r, &part); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		fmt.Printf("post %+v\n", part)
+		log.Println(part)
 		msg := fmt.Sprintf("subject: order alert\n\npart name: pipe  Qty: %v\n, thickness type: %v\ncoating type: %v\nend type: %v\nsize: %v\n", part.Quantity, part.ThicknessType, part.CoatingType, part.EndType, part.Size)
 		err := o.sendMail(msg, w)
 		if err != nil {
@@ -106,15 +107,21 @@ type order struct {
 }
 
 func (o order) nipple(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("nipple", r.RemoteAddr)
+	log.Println("nipple", r.RemoteAddr)
+	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	var part Nipple
 	if r.Method == http.MethodPost {
 		if err := form.MapForm(r, &part); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		fmt.Printf("%+v\n", part)
-		fmt.Fprintln(w, "XXX send mail!!!")
+		log.Printf("post %+v\n", part)
+
+		msg := fmt.Sprintf("subject: order alert\n\npart name: nipple  Qty: %v\nsize: %v\n", part.Quantity, part.Size)
+		err := o.sendMail(msg, w)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -141,7 +148,7 @@ func main() {
 	http.HandleFunc("/pipe", order.pipe)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("index", r.RemoteAddr)
+		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `
 			<!DOCTYPE html>
