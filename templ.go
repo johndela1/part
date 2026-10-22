@@ -21,6 +21,38 @@ const (
 var to = []string{"john@jjdev.com"}
 var senderPass string = os.Getenv("SMTPPASS")
 
+func (o order) sendMail(msg string, w http.ResponseWriter) error {
+	auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
+	msg += "\nrequester: " + o.requester
+	err := smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte(msg))
+	if err != nil {
+		return err
+	}
+
+	successPage := `
+		{{define "content"}}
+			<h1>Sent</h1>
+			<a href="/">&larr; Back</a>
+		{{end}}`
+	const baseTemplate = `
+			<!DOCTYPE html>
+			<html>
+			<head>
+			    <title>Part Ordering System</title>
+			</head>
+			<body>
+			    <div>
+				{{template "content" .}}
+			    </div>
+			</body>
+			</html>
+			`
+	tmpl := template.Must(template.New("layout").Parse(baseTemplate))
+	tmpl = template.Must(tmpl.Parse(successPage))
+	tmpl.Execute(w, nil)
+	return nil
+}
+
 type Nipple struct {
 	Size     string `form:"input,text" label:"size" values:"close:close;1x2:1x2;1x2 1/2:1x2 1/2;1x3:1x3;1x3 1/2:1x3 1/2;1x4:1x4;1x4 1/2:1x4 1/2;1X5:1X5;1x5 1/2:1x5 1/2;1x6:1x6;1x6 1/2:1x6 1/2;1x7:1x7;1x7 1/2:1x7 1/2;1x8:1x8;1x8 1/2:1x8 1/2;1x9:1x9;1x9 1/2:1x9 1/2;1x10:1x10;1x10 1/2:1x10 1/2;1x11:1x11;1x11 1/2:1x11 1/2;1x12:1x12;" required:"true"`
 	Quantity int    `form:"input,number" label:"Quantity" required:"true"`
@@ -42,35 +74,12 @@ func (o order) pipe(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		fmt.Printf("%+v\n", part)
+		fmt.Printf("post %+v\n", part)
 		msg := fmt.Sprintf("subject: order alert\n\npart name: pipe  Qty: %v\n, thickness type: %v\ncoating type: %v\nend type: %v\nsize: %v\n", part.Quantity, part.ThicknessType, part.CoatingType, part.EndType, part.Size)
-		auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
-		err := smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte(msg))
+		err := o.sendMail(msg, w)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
 		}
-
-		successPage := `{{define "content"}}
-			<h1>Sent</h1>
-			<a href="/">&larr; Back</a>
-		{{end}}`
-		const baseTemplate = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Part Ordering System</title>
-</head>
-<body>
-    <div>
-        {{template "content" .}}
-    </div>
-</body>
-</html>
-`
-		tmpl := template.Must(template.New("layout").Parse(baseTemplate))
-		tmpl = template.Must(tmpl.Parse(successPage))
-		tmpl.Execute(w, nil)
 		return
 	}
 
@@ -91,25 +100,21 @@ func (o order) pipe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 type order struct {
-	items []string
+	requester string
+	items     []string
 }
 
-func (o order) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("success")
-}
 func (o order) nipple(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("nipple", r.RemoteAddr)
 	var part Nipple
-
 	if r.Method == http.MethodPost {
 		if err := form.MapForm(r, &part); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 		fmt.Printf("%+v\n", part)
-		fmt.Fprintln(w, "Submitted")
+		fmt.Fprintln(w, "XXX send mail!!!")
 		return
 	}
 
@@ -130,13 +135,12 @@ func (o order) nipple(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 func main() {
-	order := order{}
-	mux := http.NewServeMux()
-	mux.Handle("/nipple", http.HandlerFunc(order.nipple))
-	mux.Handle("/pipe", http.HandlerFunc(order.pipe))
-	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	order := order{requester: "bob"}
+	http.HandleFunc("/nipple", order.nipple)
+	http.HandleFunc("/pipe", order.pipe)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("index", r.RemoteAddr)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `
@@ -150,6 +154,6 @@ func main() {
 			</body>
 			</html>
 		`)
-	}))
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	})
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
