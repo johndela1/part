@@ -55,7 +55,7 @@ func (o order) sendMail(msg string, w http.ResponseWriter) error {
 }
 
 type Nipple struct {
-	Size     string `form:"input,text" label:"size" values:"close:close;1x2:1x2;1x2 1/2:1x2 1/2;1x3:1x3;1x3 1/2:1x3 1/2;1x4:1x4;1x4 1/2:1x4 1/2;1X5:1X5;1x5 1/2:1x5 1/2;1x6:1x6;1x6 1/2:1x6 1/2;1x7:1x7;1x7 1/2:1x7 1/2;1x8:1x8;1x8 1/2:1x8 1/2;1x9:1x9;1x9 1/2:1x9 1/2;1x10:1x10;1x10 1/2:1x10 1/2;1x11:1x11;1x11 1/2:1x11 1/2;1x12:1x12;" required:"true"`
+	Size     string `form:"input,text" label:"size" values:"close:close;1x2:1x2;1x2½:1x2½;1x3:1x3;1x3½:1x3½;1x4:1x4;1x4½:1x4½;1X5:1X5;1x5½:1x5½;1x6:1x6;1x6½:1x6½;1x7:1x7;1x7½:1x7½;1x8:1x8;1x8½:1x8½;1x9:1x9;1x9½:1x9½;1x10:1x10;1x10½:1x10½;1x11:1x11;1x11½:1x11½;1x12:1x12;" required:"true"`
 	Quantity int    `form:"input,number" label:"Quantity" required:"true"`
 }
 
@@ -63,7 +63,7 @@ type Pipe struct {
 	ThicknessType string `form:"input,text" label:"Thickness Type" values:"SCH 10:SCH 10;SCH 40:SCH 40"`
 	CoatingType   string `form:"input,text" label:"Coating Type" values:"Regular:Regular;Galvanized:Galvanized"`
 	EndType       string `form:"input,text" label:"End Type" values:"Plain End:Plain End;Threaded:Threaded;Grooved:Grooved"`
-	Size          string `form:"input,text" label:"Size" values:"8”:8”;6”:6”;4”:4”;3”:3”;2 1/2”:2 1/2”;2”:2”;1 1/2”:1 1/2”;1 1/4”:1 1/4”;1”:1”"`
+	Size          string `form:"input,text" label:"Size" values:"8”:8”;6”:6”;4”:4”;3”:3”;2½”:2½”;2”:2”;1½”:1½”;1¼”:1¼”;1”:1”"`
 	Quantity      int    `form:"input,number" label:"Quantity" required:"true"`
 }
 
