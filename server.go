@@ -201,23 +201,23 @@ func readUsers(r io.Reader) (map[string]string, error) {
 	return users, scanner.Err()
 }
 func requireLogin(next http.HandlerFunc) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        cookie, err := r.Cookie("sid")
-        if err != nil {
-            http.Redirect(w, r, "/login", http.StatusSeeOther)
-            return
-        }
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("sid")
+		if err != nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
 
-        sessionsMu.Lock()
-        _, ok := sessions[cookie.Value]
-        sessionsMu.Unlock()
+		sessionsMu.Lock()
+		_, ok := sessions[cookie.Value]
+		sessionsMu.Unlock()
 
-        if !ok {
-            http.Redirect(w, r, "/login", http.StatusSeeOther)
-            return
-        }
-        next(w, r)
-    }
+		if !ok {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	}
 }
 func main() {
 	order := order{requester: "bob"}
@@ -264,10 +264,10 @@ func main() {
 	http.HandleFunc("GET /pipe", requireLogin(order.pipe))
 	http.HandleFunc("POST /pipe", requireLogin(order.pipe))
 	/*
-	http.HandleFunc("GET /nipple", order.nipple)
-	http.HandleFunc("POST /nipple", order.nipple)
-	http.HandleFunc("GET /pipe", order.pipe)
-	http.HandleFunc("POST /pipe", order.pipe)
+		http.HandleFunc("GET /nipple", order.nipple)
+		http.HandleFunc("POST /nipple", order.nipple)
+		http.HandleFunc("GET /pipe", order.pipe)
+		http.HandleFunc("POST /pipe", order.pipe)
 	*/
 
 	http.HandleFunc("/old", func(w http.ResponseWriter, r *http.Request) {
@@ -365,7 +365,21 @@ func main() {
 		delete(carts, id)
 		cartsMu.Unlock()
 	}))
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	go func() {
+		redirect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r,
+				"https://jjdev.com"+r.URL.RequestURI(),
+				http.StatusPermanentRedirect)
+		})
+		log.Fatal(http.ListenAndServe(":8080", redirect))
+	}()
+
+	log.Fatal(http.ListenAndServeTLS(
+		":8443",
+		"/etc/letsencrypt/live/jjdev.com/fullchain.pem",
+		"/etc/letsencrypt/live/jjdev.com/privkey.pem",
+		nil,
+	))
 }
 
 //dns https, cart, id
