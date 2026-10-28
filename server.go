@@ -138,10 +138,10 @@ type order struct {
 func readUsers(r io.Reader) (map[string]string, error) {
 	users := make(map[string]string)
 	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
+	for line := 1; scanner.Scan(); line++ {
 		fields := strings.SplitN(scanner.Text(), "|", 2)
 		if len(fields) != 2 {
-			return nil, fmt.Errorf("invalid passwd entry: %q", scanner.Text())
+			return nil, fmt.Errorf("passwd:%d: expected username|password", line)
 		}
 		users[fields[0]] = fields[1]
 	}
