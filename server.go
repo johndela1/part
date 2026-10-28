@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/smtp"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -20,7 +22,7 @@ import (
 var (
 	sessions   = make(map[string]string)
 	sessionsMu sync.Mutex
-	carts      = make(map[string]*Cart)
+	carts      = make(map[string][]any)
 	cartsMu    sync.Mutex
 
 	to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
@@ -35,24 +37,10 @@ const (
 	senderMail = "john@jjdev.com"
 )
 
-type Cart struct {
-	Items []any
-}
-
-func addToCart(id string, part any) {
-	cartsMu.Lock()
-	defer cartsMu.Unlock()
-
-	if carts[id] == nil {
-		carts[id] = &Cart{}
-	}
-	carts[id].Items = append(carts[id].Items, part)
-}
-func (o order) sendMail(msg string, w http.ResponseWriter) error {
+func sendMail(requester, msg string, w http.ResponseWriter) error {
 	auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
-	msg += "\nrequester: " + o.requester
-	err := smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte(msg))
-	if err != nil {
+	msg += "\nrequester: " + requester
+	if err := smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte(msg)); err != nil {
 		return err
 	}
 
@@ -106,7 +94,9 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			addToCart(id, part)
+			cartsMu.Lock()
+			carts[id] = append(carts[id], part)
+			cartsMu.Unlock()
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
@@ -130,20 +120,15 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type order struct {
-	requester string
-	items     []string
-}
-
 func readUsers(r io.Reader) (map[string]string, error) {
 	users := make(map[string]string)
 	scanner := bufio.NewScanner(r)
 	for line := 1; scanner.Scan(); line++ {
-		fields := strings.SplitN(scanner.Text(), "|", 2)
-		if len(fields) != 2 {
+		username, password, found := strings.Cut(scanner.Text(), "|")
+		if !found {
 			return nil, fmt.Errorf("passwd:%d: expected username|password", line)
 		}
-		users[fields[0]] = fields[1]
+		users[username] = password
 	}
 	return users, scanner.Err()
 }
@@ -254,10 +239,7 @@ func main() {
 		}
 
 		cartsMu.Lock()
-		var items []any
-		if cart := carts[id]; cart != nil {
-			items = append(items, cart.Items...)
-		}
+		items := append([]any(nil), carts[id]...)
 		cartsMu.Unlock()
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -271,13 +253,15 @@ func main() {
 				<a href="./pipe">pipe</a><br>
 				</h1>
 		`)
-		for _, item := range items {
+		for index, item := range items {
+			fmt.Fprint(w, `<form action="/remove" method="post"><p>`)
 			switch p := item.(type) {
 			case Pipe:
-				fmt.Fprintf(w, "<p>pipe: %s</p>", template.HTMLEscapeString(fmt.Sprintf("%+v", p)))
+				fmt.Fprintf(w, "pipe: %s", template.HTMLEscapeString(fmt.Sprintf("%+v", p)))
 			case Nipple:
-				fmt.Fprintf(w, "<p>nipple: %s</p>", template.HTMLEscapeString(fmt.Sprintf("%+v", p)))
+				fmt.Fprintf(w, "nipple: %s", template.HTMLEscapeString(fmt.Sprintf("%+v", p)))
 			}
+			fmt.Fprintf(w, ` <button type="submit" name="index" value="%d">Delete</button></p></form>`, index)
 		}
 
 		if len(items) > 0 {
@@ -291,6 +275,29 @@ func main() {
 		`)
 		}
 	}))
+	http.HandleFunc("POST /remove", requireLogin(func(w http.ResponseWriter, r *http.Request) {
+		id, err := sessionID(w, r)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		index, err := strconv.Atoi(r.FormValue("index"))
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		cartsMu.Lock()
+		cart := carts[id]
+		if index < 0 || index >= len(cart) {
+			cartsMu.Unlock()
+			http.NotFound(w, r)
+			return
+		}
+		carts[id] = slices.Delete(cart, index, index+1)
+		cartsMu.Unlock()
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}))
 	http.HandleFunc("POST /submit", requireLogin(func(w http.ResponseWriter, r *http.Request) {
 		id, err := sessionID(w, r)
 		if err != nil {
@@ -300,14 +307,14 @@ func main() {
 
 		cartsMu.Lock()
 		cart := carts[id]
-		if cart == nil || len(cart.Items) == 0 {
+		if len(cart) == 0 {
 			cartsMu.Unlock()
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
 
 		var parts string
-		for _, item := range cart.Items {
+		for _, item := range cart {
 			switch p := item.(type) {
 			case Pipe:
 				parts += fmt.Sprintf("Pipe: %+v\n", p)
@@ -320,12 +327,11 @@ func main() {
 		sessionsMu.Lock()
 		username := sessions[id]
 		sessionsMu.Unlock()
-		order := order{requester: username}
 		orderID := rand.Text()
 		if err := recordOrder("%s: submitted by %q: %q", orderID, username, strings.TrimSuffix(parts, "\n")); err != nil {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
 		}
-		err = order.sendMail("subject: order alert\n\n"+parts, w)
+		err = sendMail(username, "subject: order alert\n\n"+parts, w)
 		status := "sent"
 		if err != nil {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
