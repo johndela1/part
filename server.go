@@ -20,6 +20,13 @@ import (
 var (
 	sessions   = make(map[string]string)
 	sessionsMu sync.Mutex
+	carts      = make(map[string]*Cart)
+	cartsMu    sync.Mutex
+
+	to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
+
+	// to = []string{"john@jjdev.com"}
+	senderPass string = os.Getenv("SMTPPASS")
 )
 
 const (
@@ -31,16 +38,6 @@ const (
 type Cart struct {
 	Items []any
 }
-
-var (
-	carts   = make(map[string]*Cart)
-	cartsMu sync.Mutex
-)
-
-var to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
-
-// to = []string{"john@jjdev.com"}
-var senderPass string = os.Getenv("SMTPPASS")
 
 func addToCart(id string, part any) {
 	cartsMu.Lock()
@@ -96,7 +93,7 @@ type Pipe struct {
 	Quantity      int    `form:"input,number" label:"Quantity" required:"true"`
 }
 
-func (o order) pipe(w http.ResponseWriter, r *http.Request) {
+func pipe(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	var part Pipe
 	if r.Method == http.MethodPost {
@@ -105,13 +102,6 @@ func (o order) pipe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Println(part)
-		/*
-			msg := fmt.Sprintf("subject: order alert\n\npart name: pipe  Qty: %v\n, thickness type: %v\ncoating type: %v\nend type: %v\nsize: %v\n", part.Quantity, part.ThicknessType, part.CoatingType, part.EndType, part.Size)
-			err := o.sendMail(msg, w)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-		*/
 		id, err := sessionID(w, r)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -144,7 +134,7 @@ type order struct {
 	items     []string
 }
 
-func (o order) nipple(w http.ResponseWriter, r *http.Request) {
+func nipple(w http.ResponseWriter, r *http.Request) {
 	log.Println("nipple", r.RemoteAddr)
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	var part Nipple
@@ -154,13 +144,6 @@ func (o order) nipple(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("post %+v\n", part)
-		/*
-			msg := fmt.Sprintf("subject: order alert\n\npart name: nipple  Qty: %v\nsize: %v\n", part.Quantity, part.Size)
-			err := o.sendMail(msg, w)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-		*/
 		id, err := sessionID(w, r)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -168,7 +151,6 @@ func (o order) nipple(w http.ResponseWriter, r *http.Request) {
 		}
 		addToCart(id, part)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
 		return
 	}
 
@@ -220,7 +202,6 @@ func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 func main() {
-	order := order{requester: "bob"}
 	f, err := os.Open("passwd")
 	if err != nil {
 		log.Fatal(err)
@@ -233,6 +214,7 @@ func main() {
 	}
 	http.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 		fmt.Fprint(w, `<form method="post" action="/login">
 	<input name="username" placeholder="username" required autofocus><br>
         <input name="password" type="password" placeholder="password" required><br>
@@ -241,6 +223,7 @@ func main() {
 	})
 
 	http.HandleFunc("POST /login", func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 		username := r.FormValue("username")
 		if password, ok := users[username]; !ok || password != r.FormValue("password") {
 			http.Error(w, "Invalid login", http.StatusUnauthorized)
@@ -259,16 +242,10 @@ func main() {
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
-	http.HandleFunc("GET /nipple", requireLogin(order.nipple))
-	http.HandleFunc("POST /nipple", requireLogin(order.nipple))
-	http.HandleFunc("GET /pipe", requireLogin(order.pipe))
-	http.HandleFunc("POST /pipe", requireLogin(order.pipe))
-	/*
-		http.HandleFunc("GET /nipple", order.nipple)
-		http.HandleFunc("POST /nipple", order.nipple)
-		http.HandleFunc("GET /pipe", order.pipe)
-		http.HandleFunc("POST /pipe", order.pipe)
-	*/
+	http.HandleFunc("GET /nipple", requireLogin(nipple))
+	http.HandleFunc("POST /nipple", requireLogin(nipple))
+	http.HandleFunc("GET /pipe", requireLogin(pipe))
+	http.HandleFunc("POST /pipe", requireLogin(pipe))
 
 	http.HandleFunc("/old", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -313,9 +290,9 @@ func main() {
 		for _, item := range items {
 			switch p := item.(type) {
 			case Pipe:
-				fmt.Fprintf(w, "<p>pipe: %+v</p>", p)
+				fmt.Fprintf(w, "<p>pipe: %s</p>", template.HTMLEscapeString(fmt.Sprintf("%+v", p)))
 			case Nipple:
-				fmt.Fprintf(w, "<p>nipple: %+v</p>", p)
+				fmt.Fprintf(w, "<p>nipple: %s</p>", template.HTMLEscapeString(fmt.Sprintf("%+v", p)))
 			}
 		}
 
@@ -356,6 +333,10 @@ func main() {
 		}
 		cartsMu.Unlock()
 
+		sessionsMu.Lock()
+		username := sessions[id]
+		sessionsMu.Unlock()
+		order := order{requester: username}
 		if err := order.sendMail("subject: order alert\n\n"+msg, w); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -381,8 +362,6 @@ func main() {
 		nil,
 	))
 }
-
-//dns https, cart, id
 
 func sessionID(w http.ResponseWriter, r *http.Request) (string, error) {
 	if c, err := r.Cookie("sid"); err == nil {
