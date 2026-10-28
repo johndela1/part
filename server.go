@@ -56,12 +56,7 @@ func (o order) sendMail(msg string, w http.ResponseWriter) error {
 		return err
 	}
 
-	successPage := `
-		{{define "content"}}
-			<h1>Sent</h1>
-			<a href="/">&larr; Back</a>
-		{{end}}`
-	const baseTemplate = `
+	const successPage = `
 			<!DOCTYPE html>
 			<html>
 			<head>
@@ -69,20 +64,19 @@ func (o order) sendMail(msg string, w http.ResponseWriter) error {
 			</head>
 			<body>
 			    <div>
-				{{template "content" .}}
+				<h1>Sent</h1>
+				<a href="/">&larr; Back</a>
 			    </div>
 			</body>
 			</html>
 			`
-	tmpl := template.Must(template.New("layout").Parse(baseTemplate))
-	tmpl = template.Must(tmpl.Parse(successPage))
-	tmpl.Execute(w, nil)
+	io.WriteString(w, successPage)
 	return nil
 }
 
 type Nipple struct {
 	Size     string `form:"dropdown" label:"size" values:"close:close;1x2:1x2;1x2½:1x2½;1x3:1x3;1x3½:1x3½;1x4:1x4;1x4½:1x4½;1X5:1X5;1x5½:1x5½;1x6:1x6;1x6½:1x6½;1x7:1x7;1x7½:1x7½;1x8:1x8;1x8½:1x8½;1x9:1x9;1x9½:1x9½;1x10:1x10;1x10½:1x10½;1x11:1x11;1x11½:1x11½;1x12:1x12;" required:"true"`
-	Quantity int    `form:"input,number" label:"Quantity" required:"true"`
+	Quantity int    `form:"input,number" label:"Quantity" required:"true" min:"1"`
 }
 
 type Pipe struct {
@@ -90,11 +84,14 @@ type Pipe struct {
 	CoatingType   string `form:"input,text" label:"Coating Type" values:"Regular:Regular;Galvanized:Galvanized"`
 	EndType       string `form:"input,text" label:"End Type" values:"Plain End:Plain End;Threaded:Threaded;Grooved:Grooved"`
 	Size          string `form:"input,text" label:"Size" values:"8”:8”;6”:6”;4”:4”;3”:3”;2½”:2½”;2”:2”;1½”:1½”;1¼”:1¼”;1”:1”"`
-	Quantity      int    `form:"input,number" label:"Quantity" required:"true"`
+	Quantity      int    `form:"input,number" label:"Quantity" required:"true" min:"1"`
 }
 
 func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	var part T
+	var errors form.FieldErrors
+	renderer := form.NewForm()
+	renderer.SetTheme("plain")
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	if r.Method == http.MethodPost {
 		if err := form.MapForm(r, &part); err != nil {
@@ -102,28 +99,32 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("post %+v", part)
-		id, err := sessionID(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
+		errors = renderer.ValidateForm(&part)
+		if len(errors) == 0 {
+			id, err := sessionID(w, r)
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			addToCart(id, part)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
-		addToCart(id, part)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
 	}
 
 	model := form.WithRequestInfo(r, part, form.Info{
 		Target: r.URL.Path, Method: "post", SubmitText: "Save part",
 	})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if len(errors) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
+	}
 
-	renderer := form.NewForm()
-	renderer.SetTheme("plain")
 	page := template.Must(template.New("part").Funcs(renderer.FuncMap()).Parse(
 		`{{ form_render .Form .Errors }}`,
 	))
 	if err := page.Execute(w, map[string]any{
-		"Form": model, "Errors": form.FieldErrors(nil),
+		"Form": model, "Errors": errors,
 	}); err != nil {
 		log.Println(err)
 	}
