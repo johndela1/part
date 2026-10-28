@@ -37,31 +37,6 @@ const (
 	senderMail = "john@jjdev.com"
 )
 
-func sendMail(requester, msg string, w http.ResponseWriter) error {
-	auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
-	msg += "\nrequester: " + requester
-	if err := smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte(msg)); err != nil {
-		return err
-	}
-
-	const successPage = `
-			<!DOCTYPE html>
-			<html>
-			<head>
-			    <title>pot part ordering tool</title>
-			</head>
-			<body>
-			    <div>
-				<h1>Sent</h1>
-				<a href="/">&larr; Back</a>
-			    </div>
-			</body>
-			</html>
-			`
-	io.WriteString(w, successPage)
-	return nil
-}
-
 type Nipple struct {
 	Size     string `form:"dropdown" label:"size" values:"close:close;1x2:1x2;1x2½:1x2½;1x3:1x3;1x3½:1x3½;1x4:1x4;1x4½:1x4½;1X5:1X5;1x5½:1x5½;1x6:1x6;1x6½:1x6½;1x7:1x7;1x7½:1x7½;1x8:1x8;1x8½:1x8½;1x9:1x9;1x9½:1x9½;1x10:1x10;1x10½:1x10½;1x11:1x11;1x11½:1x11½;1x12:1x12;" required:"true"`
 	Quantity int    `form:"input,number" label:"Quantity" required:"true" min:"1"`
@@ -331,7 +306,8 @@ func main() {
 		if err := recordOrder("%s: submitted by %q: %q", orderID, username, strings.TrimSuffix(parts, "\n")); err != nil {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
 		}
-		err = sendMail(username, "subject: order alert\n\n"+parts, w)
+		auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
+		err = smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte("subject: order alert\n\n"+parts+"\nrequester: "+username))
 		status := "sent"
 		if err != nil {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
@@ -348,6 +324,22 @@ func main() {
 		cartsMu.Lock()
 		delete(carts, id)
 		cartsMu.Unlock()
+
+		const successPage = `
+			<!DOCTYPE html>
+			<html>
+			<head>
+			    <title>pot part ordering tool</title>
+			</head>
+			<body>
+			    <div>
+				<h1>Sent</h1>
+				<a href="/">&larr; Back</a>
+			    </div>
+			</body>
+			</html>
+			`
+		io.WriteString(w, successPage)
 	}))
 	go func() {
 		redirect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
