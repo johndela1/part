@@ -93,15 +93,15 @@ type Pipe struct {
 	Quantity      int    `form:"input,number" label:"Quantity" required:"true"`
 }
 
-func pipe(w http.ResponseWriter, r *http.Request) {
+func partForm[T any](w http.ResponseWriter, r *http.Request) {
+	var part T
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
-	var part Pipe
 	if r.Method == http.MethodPost {
 		if err := form.MapForm(r, &part); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		log.Println(part)
+		log.Printf("post %+v", part)
 		id, err := sessionID(w, r)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -113,7 +113,7 @@ func pipe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model := form.WithRequestInfo(r, part, form.Info{
-		Target: "/pipe", Method: "post", SubmitText: "Save part",
+		Target: r.URL.Path, Method: "post", SubmitText: "Save part",
 	})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
@@ -134,42 +134,6 @@ type order struct {
 	items     []string
 }
 
-func nipple(w http.ResponseWriter, r *http.Request) {
-	log.Println("nipple", r.RemoteAddr)
-	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
-	var part Nipple
-	if r.Method == http.MethodPost {
-		if err := form.MapForm(r, &part); err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-		log.Printf("post %+v\n", part)
-		id, err := sessionID(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		addToCart(id, part)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-
-	model := form.WithRequestInfo(r, part, form.Info{
-		Target: "/nipple", Method: "post", SubmitText: "Save part",
-	})
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	renderer := form.NewForm()
-	renderer.SetTheme("plain")
-	page := template.Must(template.New("part").Funcs(renderer.FuncMap()).Parse(
-		`{{ form_render .Form .Errors }}`,
-	))
-	if err := page.Execute(w, map[string]any{
-		"Form": model, "Errors": form.FieldErrors(nil),
-	}); err != nil {
-		log.Println(err)
-	}
-}
 func readUsers(r io.Reader) (map[string]string, error) {
 	users := make(map[string]string)
 	scanner := bufio.NewScanner(r)
@@ -202,6 +166,19 @@ func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 func main() {
+	ordersFile, err := os.OpenFile("orders.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer ordersFile.Close()
+	ordersLog := log.New(ordersFile, "", log.LstdFlags)
+	recordOrder := func(format string, args ...any) error {
+		if err := ordersLog.Output(2, fmt.Sprintf(format, args...)); err != nil {
+			return err
+		}
+		return ordersFile.Sync()
+	}
+
 	f, err := os.Open("passwd")
 	if err != nil {
 		log.Fatal(err)
@@ -242,10 +219,10 @@ func main() {
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
-	http.HandleFunc("GET /nipple", requireLogin(nipple))
-	http.HandleFunc("POST /nipple", requireLogin(nipple))
-	http.HandleFunc("GET /pipe", requireLogin(pipe))
-	http.HandleFunc("POST /pipe", requireLogin(pipe))
+	http.HandleFunc("GET /nipple", requireLogin(partForm[Nipple]))
+	http.HandleFunc("POST /nipple", requireLogin(partForm[Nipple]))
+	http.HandleFunc("GET /pipe", requireLogin(partForm[Pipe]))
+	http.HandleFunc("POST /pipe", requireLogin(partForm[Pipe]))
 
 	http.HandleFunc("/old", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -337,7 +314,20 @@ func main() {
 		username := sessions[id]
 		sessionsMu.Unlock()
 		order := order{requester: username}
-		if err := order.sendMail("subject: order alert\n\n"+msg, w); err != nil {
+		orderID := rand.Text()
+		if err := recordOrder("order=%s requester=%q submitted items=%q", orderID, username, strings.TrimSuffix(msg, "\n")); err != nil {
+			log.Printf("order=%s could not save order: %v", orderID, err)
+		}
+		err = order.sendMail("subject: order alert\n\n"+msg, w)
+		status := "sent"
+		if err != nil {
+			log.Printf("order=%s email failed: %v", orderID, err)
+			status = fmt.Sprintf("failed: %v", err)
+		}
+		if logErr := recordOrder("order=%s email=%q", orderID, status); logErr != nil {
+			log.Printf("order=%s email=%s; could not save email result: %v", orderID, status, logErr)
+		}
+		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
