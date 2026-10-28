@@ -166,17 +166,23 @@ func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 func main() {
+	ordersLog := log.New(os.Stderr, "", log.LstdFlags)
 	ordersFile, err := os.OpenFile("orders.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("ERROR %q", err.Error())
+		ordersLog.SetPrefix(fmt.Sprintf("ERROR %q: ", err.Error()))
+	} else {
+		defer ordersFile.Close()
+		ordersLog.SetOutput(ordersFile)
 	}
-	defer ordersFile.Close()
-	ordersLog := log.New(ordersFile, "", log.LstdFlags)
 	recordOrder := func(format string, args ...any) error {
 		if err := ordersLog.Output(2, fmt.Sprintf(format, args...)); err != nil {
 			return err
 		}
-		return ordersFile.Sync()
+		if ordersFile != nil {
+			return ordersFile.Sync()
+		}
+		return nil
 	}
 
 	f, err := os.Open("passwd")
@@ -299,13 +305,13 @@ func main() {
 			return
 		}
 
-		var msg string
+		var parts string
 		for _, item := range cart.Items {
 			switch p := item.(type) {
 			case Pipe:
-				msg += fmt.Sprintf("Pipe: %+v\n", p)
+				parts += fmt.Sprintf("Pipe: %+v\n", p)
 			case Nipple:
-				msg += fmt.Sprintf("Nipple: %+v\n", p)
+				parts += fmt.Sprintf("Nipple: %+v\n", p)
 			}
 		}
 		cartsMu.Unlock()
@@ -315,17 +321,17 @@ func main() {
 		sessionsMu.Unlock()
 		order := order{requester: username}
 		orderID := rand.Text()
-		if err := recordOrder("order=%s requester=%q submitted items=%q", orderID, username, strings.TrimSuffix(msg, "\n")); err != nil {
-			log.Printf("order=%s could not save order: %v", orderID, err)
+		if err := recordOrder("%s: submitted by %q: %q", orderID, username, strings.TrimSuffix(parts, "\n")); err != nil {
+			log.Printf("ERROR %s: %q", orderID, err.Error())
 		}
-		err = order.sendMail("subject: order alert\n\n"+msg, w)
+		err = order.sendMail("subject: order alert\n\n"+parts, w)
 		status := "sent"
 		if err != nil {
-			log.Printf("order=%s email failed: %v", orderID, err)
+			log.Printf("ERROR %s: %q", orderID, err.Error())
 			status = fmt.Sprintf("failed: %v", err)
 		}
-		if logErr := recordOrder("order=%s email=%q", orderID, status); logErr != nil {
-			log.Printf("order=%s email=%s; could not save email result: %v", orderID, status, logErr)
+		if logErr := recordOrder("%s: email %q", orderID, status); logErr != nil {
+			log.Printf("ERROR %s: email %q: %q", orderID, status, logErr.Error())
 		}
 		if err != nil {
 			http.Error(w, err.Error(), 500)
