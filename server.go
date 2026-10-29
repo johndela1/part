@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/smtp"
 	"os"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,6 +51,24 @@ type Pipe struct {
 	Quantity      int    `form:"input,number" label:"Quantity" required:"true" min:"1"`
 }
 
+func formatPart(part any) string {
+	value := reflect.ValueOf(part)
+	partType := value.Type()
+	var fields []string
+	for index := 0; index < value.NumField(); index++ {
+		field := partType.Field(index)
+		if !field.IsExported() {
+			continue
+		}
+		label := field.Tag.Get("label")
+		if label == "" {
+			label = field.Name
+		}
+		fields = append(fields, fmt.Sprintf("%s: %v", label, value.Field(index).Interface()))
+	}
+	return partType.Name() + ": " + strings.Join(fields, ", ")
+}
+
 func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	var part T
 	var errors form.FieldErrors
@@ -61,7 +80,7 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		log.Printf("post %+v", part)
+		log.Printf("post %s", formatPart(part))
 		errors = renderer.ValidateForm(&part)
 		if len(errors) == 0 {
 			id, err := sessionID(w, r)
@@ -230,12 +249,7 @@ func main() {
 		`)
 		for index, item := range items {
 			fmt.Fprint(w, `<form action="/remove" method="post"><p>`)
-			switch p := item.(type) {
-			case Pipe:
-				fmt.Fprintf(w, "pipe: %s", template.HTMLEscapeString(fmt.Sprintf("%+v", p)))
-			case Nipple:
-				fmt.Fprintf(w, "nipple: %s", template.HTMLEscapeString(fmt.Sprintf("%+v", p)))
-			}
+			fmt.Fprint(w, template.HTMLEscapeString(formatPart(item)))
 			fmt.Fprintf(w, ` <button type="submit" name="index" value="%d">Delete</button></p></form>`, index)
 		}
 
@@ -290,12 +304,7 @@ func main() {
 
 		var parts string
 		for _, item := range cart {
-			switch p := item.(type) {
-			case Pipe:
-				parts += fmt.Sprintf("Pipe: %+v\n", p)
-			case Nipple:
-				parts += fmt.Sprintf("Nipple: %+v\n", p)
-			}
+			parts += formatPart(item) + "\n"
 		}
 		cartsMu.Unlock()
 
