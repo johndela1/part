@@ -243,7 +243,12 @@ func submitOrder(recordOrder func(string, ...any) error) http.HandlerFunc {
 		username := sessions[id]
 		sessionsMu.Unlock()
 		orderID := rand.Text()
-		if err := recordOrder("%s: submitted by %q: %q", orderID, username, strings.TrimSuffix(parts, "\n")); err != nil {
+		if err := recordOrder(
+			"%s: submitted by %q: %q",
+			orderID,
+			username,
+			strings.TrimSuffix(parts, "\n"),
+		); err != nil {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
 		}
 		auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
@@ -286,6 +291,22 @@ func submitOrder(recordOrder func(string, ...any) error) http.HandlerFunc {
 			</html>
 			`)
 	}
+}
+
+func sessionID(w http.ResponseWriter, r *http.Request) string {
+	if c, err := r.Cookie("sid"); err == nil {
+		return c.Value
+	}
+
+	b := make([]byte, 32)
+	rand.Read(b)
+
+	id := hex.EncodeToString(b)
+	http.SetCookie(w, &http.Cookie{
+		Name: "sid", Value: id, Path: "/",
+		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+	})
+	return id
 }
 
 func main() {
@@ -344,20 +365,4 @@ func main() {
 		"/etc/letsencrypt/live/jjdev.com/privkey.pem",
 		nil,
 	))
-}
-
-func sessionID(w http.ResponseWriter, r *http.Request) string {
-	if c, err := r.Cookie("sid"); err == nil {
-		return c.Value
-	}
-
-	b := make([]byte, 32)
-	rand.Read(b)
-
-	id := hex.EncodeToString(b)
-	http.SetCookie(w, &http.Cookie{
-		Name: "sid", Value: id, Path: "/",
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
-	})
-	return id
 }
