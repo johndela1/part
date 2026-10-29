@@ -299,7 +299,7 @@ func main() {
 		delete(carts, id)
 		cartsMu.Unlock()
 
-		const successPage = `
+		io.WriteString(w, `
 			<!DOCTYPE html>
 			<html>
 			<head>
@@ -312,8 +312,7 @@ func main() {
 			    </div>
 			</body>
 			</html>
-			`
-		io.WriteString(w, successPage)
+			`)
 	}))
 	go func() {
 		redirect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
