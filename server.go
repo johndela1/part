@@ -68,6 +68,23 @@ func formatPart(part any) string {
 	return strings.ToLower(partType.Name() + ": " + strings.Join(fields, ", "))
 }
 
+func mapForm[T any](r *http.Request, part *T) {
+	value := reflect.ValueOf(part).Elem()
+	partType := value.Type()
+	for index := range value.NumField() {
+		field := value.Field(index)
+		text := r.FormValue(partType.Field(index).Name)
+		switch field.Kind() {
+		case reflect.String:
+			field.SetString(text)
+		case reflect.Int:
+			if number, err := strconv.ParseInt(text, 10, 64); err == nil {
+				field.SetInt(number)
+			}
+		}
+	}
+}
+
 func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	var part T
 	var errors form.FieldErrors
