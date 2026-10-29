@@ -57,9 +57,6 @@ func formatPart(part any) string {
 	var fields []string
 	for index := range value.NumField() {
 		field := partType.Field(index)
-		if !field.IsExported() {
-			continue
-		}
 		label := field.Tag.Get("label")
 		fields = append(fields, fmt.Sprintf("%s: %v", label, value.Field(index).Interface()))
 	}
