@@ -39,16 +39,16 @@ const (
 )
 
 type Nipple struct {
-	Size     string `form:"dropdown" label:"size" values:"close:close;1x2:1x2;1x2½:1x2½;1x3:1x3;1x3½:1x3½;1x4:1x4;1x4½:1x4½;1X5:1X5;1x5½:1x5½;1x6:1x6;1x6½:1x6½;1x7:1x7;1x7½:1x7½;1x8:1x8;1x8½:1x8½;1x9:1x9;1x9½:1x9½;1x10:1x10;1x10½:1x10½;1x11:1x11;1x11½:1x11½;1x12:1x12;" required:"true"`
-	Quantity int    `form:"input,number" label:"Quantity" required:"true" min:"1"`
+	Size     string `form:"dropdown" label:"size" values:"close:close;1x2:1x2;1x2½:1x2½;1x3:1x3;1x3½:1x3½;1x4:1x4;1x4½:1x4½;1X5:1x5;1x5½:1x5½;1x6:1x6;1x6½:1x6½;1x7:1x7;1x7½:1x7½;1x8:1x8;1x8½:1x8½;1x9:1x9;1x9½:1x9½;1x10:1x10;1x10½:1x10½;1x11:1x11;1x11½:1x11½;1x12:1x12;" required:"true"`
+	Quantity int    `form:"input,number" label:"quantity" required:"true" min:"1"`
 }
 
 type Pipe struct {
-	ThicknessType string `form:"input,text" label:"Thickness Type" values:"SCH 10:SCH 10;SCH 40:SCH 40"`
-	CoatingType   string `form:"input,text" label:"Coating Type" values:"Regular:Regular;Galvanized:Galvanized"`
-	EndType       string `form:"input,text" label:"End Type" values:"Plain End:Plain End;Threaded:Threaded;Grooved:Grooved"`
-	Size          string `form:"input,text" label:"Size" values:"8”:8”;6”:6”;4”:4”;3”:3”;2½”:2½”;2”:2”;1½”:1½”;1¼”:1¼”;1”:1”"`
-	Quantity      int    `form:"input,number" label:"Quantity" required:"true" min:"1"`
+	ThicknessType string `form:"input,text" label:"thickness type" values:"SCH 10:sch 10;SCH 40:sch 40"`
+	CoatingType   string `form:"input,text" label:"coating type" values:"Regular:regular;Galvanized:galvanized"`
+	EndType       string `form:"input,text" label:"end type" values:"Plain End:plain end;Threaded:threaded;Grooved:grooved"`
+	Size          string `form:"input,text" label:"size" values:"8”:8”;6”:6”;4”:4”;3”:3”;2½”:2½”;2”:2”;1½”:1½”;1¼”:1¼”;1”:1”"`
+	Quantity      int    `form:"input,number" label:"quantity" required:"true" min:"1"`
 }
 
 func formatPart(part any) string {
@@ -66,7 +66,7 @@ func formatPart(part any) string {
 		}
 		fields = append(fields, fmt.Sprintf("%s: %v", label, value.Field(index).Interface()))
 	}
-	return partType.Name() + ": " + strings.Join(fields, ", ")
+	return strings.ToLower(partType.Name() + ": " + strings.Join(fields, ", "))
 }
 
 func partForm[T any](w http.ResponseWriter, r *http.Request) {
@@ -97,7 +97,7 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	}
 
 	model := form.WithRequestInfo(r, part, form.Info{
-		Target: r.URL.Path, Method: "post", SubmitText: "Save part",
+		Target: r.URL.Path, Method: "post", SubmitText: "save part",
 	})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if len(errors) > 0 {
@@ -181,7 +181,7 @@ func main() {
 		fmt.Fprint(w, `<form method="post" action="/login">
 	<input name="username" placeholder="username" required autofocus><br>
         <input name="password" type="password" placeholder="password" required><br>
-        <button type="submit">Login</button>
+        <button type="submit">login</button>
     </form>`)
 	})
 
@@ -189,7 +189,7 @@ func main() {
 		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 		username := r.FormValue("username")
 		if password, ok := users[username]; !ok || password != r.FormValue("password") {
-			http.Error(w, "Invalid login", http.StatusUnauthorized)
+			http.Error(w, "invalid login", http.StatusUnauthorized)
 			return
 		}
 
@@ -250,13 +250,13 @@ func main() {
 		for index, item := range items {
 			fmt.Fprint(w, `<form action="/remove" method="post"><p>`)
 			fmt.Fprint(w, template.HTMLEscapeString(formatPart(item)))
-			fmt.Fprintf(w, ` <button type="submit" name="index" value="%d">Delete</button></p></form>`, index)
+			fmt.Fprintf(w, ` <button type="submit" name="index" value="%d">delete</button></p></form>`, index)
 		}
 
 		if len(items) > 0 {
 			fmt.Fprint(w, `
 			<form action="/submit" method="post">
-			    <button type="submit">Submit Order</button>
+			    <button type="submit">submit order</button>
 			</form>
 		</body>
 		</html>
@@ -342,8 +342,8 @@ func main() {
 			</head>
 			<body>
 			    <div>
-				<h1>Sent</h1>
-				<a href="/">&larr; Back</a>
+				<h1>sent</h1>
+				<a href="/">&larr; back</a>
 			    </div>
 			</body>
 			</html>
