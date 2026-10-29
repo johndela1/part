@@ -29,7 +29,7 @@ var (
 	to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
 
 	// to = []string{"john@jjdev.com"}
-	senderPass string = os.Getenv("SMTPPASS")
+	senderPass = os.Getenv("SMTPPASS")
 )
 
 const (
@@ -55,7 +55,7 @@ func formatPart(part any) string {
 	value := reflect.ValueOf(part)
 	partType := value.Type()
 	var fields []string
-	for index := 0; index < value.NumField(); index++ {
+	for index := range value.NumField() {
 		field := partType.Field(index)
 		if !field.IsExported() {
 			continue
@@ -77,7 +77,7 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	if r.Method == http.MethodPost {
 		if err := form.MapForm(r, &part); err != nil {
-			http.Error(w, err.Error(), 400)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		log.Printf("post %s", formatPart(part))
@@ -241,7 +241,7 @@ func main() {
 		id := sessionID(w, r)
 		index, err := strconv.Atoi(r.FormValue("index"))
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -291,7 +291,7 @@ func main() {
 			log.Printf("ERROR %s: email %q: %q", orderID, status, logErr.Error())
 		}
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
