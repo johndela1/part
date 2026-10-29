@@ -44,10 +44,10 @@ type Nipple struct {
 }
 
 type Pipe struct {
-	ThicknessType string `form:"input,text" label:"thickness type" values:"SCH 10:sch 10;SCH 40:sch 40"`
-	CoatingType   string `form:"input,text" label:"coating type" values:"Regular:regular;Galvanized:galvanized"`
-	EndType       string `form:"input,text" label:"end type" values:"Plain End:plain end;Threaded:threaded;Grooved:grooved"`
-	Size          string `form:"input,text" label:"size" values:"8”:8”;6”:6”;4”:4”;3”:3”;2½”:2½”;2”:2”;1½”:1½”;1¼”:1¼”;1”:1”"`
+	ThicknessType string `form:"dropdown" label:"thickness type" values:"SCH 10:sch 10;SCH 40:sch 40"`
+	CoatingType   string `form:"dropdown" label:"coating type" values:"Regular:regular;Galvanized:galvanized"`
+	EndType       string `form:"dropdown" label:"end type" values:"Plain End:plain end;Threaded:threaded;Grooved:grooved"`
+	Size          string `form:"dropdown" label:"size" values:"8”:8”;6”:6”;4”:4”;3”:3”;2½”:2½”;2”:2”;1½”:1½”;1¼”:1¼”;1”:1”"`
 	Quantity      int    `form:"input,number" label:"quantity" required:"true" min:"1"`
 }
 
