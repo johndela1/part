@@ -148,39 +148,8 @@ func loginPage(w http.ResponseWriter, r *http.Request) {
     </form>`)
 }
 
-func main() {
-	ordersLog := log.New(os.Stderr, "", log.LstdFlags)
-	ordersFile, err := os.OpenFile("orders.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
-	if err != nil {
-		log.Printf("ERROR %q", err.Error())
-		ordersLog.SetPrefix(fmt.Sprintf("ERROR %q: ", err.Error()))
-	} else {
-		defer ordersFile.Close()
-		ordersLog.SetOutput(ordersFile)
-	}
-	recordOrder := func(format string, args ...any) error {
-		if err := ordersLog.Output(2, fmt.Sprintf(format, args...)); err != nil {
-			return err
-		}
-		if ordersFile != nil {
-			return ordersFile.Sync()
-		}
-		return nil
-	}
-
-	f, err := os.Open("passwd")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-
-	users, err := readUsers(f)
-	if err != nil {
-		log.Fatal(err)
-	}
-	http.HandleFunc("GET /login", loginPage)
-
-	http.HandleFunc("POST /login", func(w http.ResponseWriter, r *http.Request) {
+func login(users map[string]string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 		username := r.FormValue("username")
 		if password, ok := users[username]; !ok || password != r.FormValue("password") {
@@ -195,23 +164,20 @@ func main() {
 		sessionsMu.Unlock()
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
-	})
-	http.HandleFunc("GET /nipple", requireLogin(partForm[Nipple]))
-	http.HandleFunc("POST /nipple", requireLogin(partForm[Nipple]))
-	http.HandleFunc("GET /pipe", requireLogin(partForm[Pipe]))
-	http.HandleFunc("POST /pipe", requireLogin(partForm[Pipe]))
+	}
+}
 
-	http.HandleFunc("GET /{$}", requireLogin(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
-		id := sessionID(w, r)
+func cartPage(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
+	id := sessionID(w, r)
 
-		cartsMu.Lock()
-		items := slices.Clone(carts[id])
-		cartsMu.Unlock()
+	cartsMu.Lock()
+	items := slices.Clone(carts[id])
+	cartsMu.Unlock()
 
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-		fmt.Fprint(w, `
+	fmt.Fprint(w, `
 			<!DOCTYPE html>
 			<html>
 			<body>
@@ -220,14 +186,14 @@ func main() {
 				<a href="./pipe">pipe</a><br>
 				</h1>
 		`)
-		for index, item := range items {
-			fmt.Fprint(w, `<form action="/remove" method="post"><p>`)
-			fmt.Fprint(w, template.HTMLEscapeString(formatPart(item)))
-			fmt.Fprintf(w, ` <button type="submit" name="index" value="%d">delete</button></p></form>`, index)
-		}
+	for index, item := range items {
+		fmt.Fprint(w, `<form action="/remove" method="post"><p>`)
+		fmt.Fprint(w, template.HTMLEscapeString(formatPart(item)))
+		fmt.Fprintf(w, ` <button type="submit" name="index" value="%d">delete</button></p></form>`, index)
+	}
 
-		if len(items) > 0 {
-			fmt.Fprint(w, `
+	if len(items) > 0 {
+		fmt.Fprint(w, `
 			<form action="/submit" method="post">
 			    <button type="submit">submit order</button>
 			</form>
@@ -235,28 +201,31 @@ func main() {
 		</html>
 
 		`)
-		}
-	}))
-	http.HandleFunc("POST /remove", requireLogin(func(w http.ResponseWriter, r *http.Request) {
-		id := sessionID(w, r)
-		index, err := strconv.Atoi(r.FormValue("index"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+	}
+}
 
-		cartsMu.Lock()
-		cart := carts[id]
-		if index < 0 || index >= len(cart) {
-			cartsMu.Unlock()
-			http.NotFound(w, r)
-			return
-		}
-		carts[id] = slices.Delete(cart, index, index+1)
+func removePart(w http.ResponseWriter, r *http.Request) {
+	id := sessionID(w, r)
+	index, err := strconv.Atoi(r.FormValue("index"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	cartsMu.Lock()
+	cart := carts[id]
+	if index < 0 || index >= len(cart) {
 		cartsMu.Unlock()
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-	}))
-	http.HandleFunc("POST /submit", requireLogin(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+		return
+	}
+	carts[id] = slices.Delete(cart, index, index+1)
+	cartsMu.Unlock()
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func submitOrder(recordOrder func(string, ...any) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id := sessionID(w, r)
 
 		cartsMu.Lock()
@@ -313,7 +282,50 @@ func main() {
 			</body>
 			</html>
 			`)
-	}))
+	}
+}
+
+func main() {
+	ordersLog := log.New(os.Stderr, "", log.LstdFlags)
+	ordersFile, err := os.OpenFile("orders.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		log.Printf("ERROR %q", err.Error())
+		ordersLog.SetPrefix(fmt.Sprintf("ERROR %q: ", err.Error()))
+	} else {
+		defer ordersFile.Close()
+		ordersLog.SetOutput(ordersFile)
+	}
+	recordOrder := func(format string, args ...any) error {
+		if err := ordersLog.Output(2, fmt.Sprintf(format, args...)); err != nil {
+			return err
+		}
+		if ordersFile != nil {
+			return ordersFile.Sync()
+		}
+		return nil
+	}
+
+	f, err := os.Open("passwd")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	users, err := readUsers(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	http.HandleFunc("GET /login", loginPage)
+
+	http.HandleFunc("POST /login", login(users))
+	http.HandleFunc("GET /nipple", requireLogin(partForm[Nipple]))
+	http.HandleFunc("POST /nipple", requireLogin(partForm[Nipple]))
+	http.HandleFunc("GET /pipe", requireLogin(partForm[Pipe]))
+	http.HandleFunc("POST /pipe", requireLogin(partForm[Pipe]))
+
+	http.HandleFunc("GET /{$}", requireLogin(cartPage))
+	http.HandleFunc("POST /remove", requireLogin(removePart))
+	http.HandleFunc("POST /submit", requireLogin(submitOrder(recordOrder)))
 	go func() {
 		redirect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r,
