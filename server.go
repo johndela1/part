@@ -138,7 +138,7 @@ func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 	}
 }
-func loginPage(w http.ResponseWriter, r *http.Request) {
+func login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	fmt.Fprint(w, `<form method="post" action="/login">
@@ -148,7 +148,7 @@ func loginPage(w http.ResponseWriter, r *http.Request) {
     </form>`)
 }
 
-func login(users map[string]string) http.HandlerFunc {
+func authenticate(users map[string]string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 		username := r.FormValue("username")
@@ -167,7 +167,7 @@ func login(users map[string]string) http.HandlerFunc {
 	}
 }
 
-func cartPage(w http.ResponseWriter, r *http.Request) {
+func index(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	id := sessionID(w, r)
 
@@ -321,15 +321,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	http.HandleFunc("GET /login", loginPage)
+	http.HandleFunc("GET /login", login)
 
-	http.HandleFunc("POST /login", login(users))
+	http.HandleFunc("POST /login", authenticate(users))
 	http.HandleFunc("GET /nipple", requireLogin(partForm[Nipple]))
 	http.HandleFunc("POST /nipple", requireLogin(partForm[Nipple]))
 	http.HandleFunc("GET /pipe", requireLogin(partForm[Pipe]))
 	http.HandleFunc("POST /pipe", requireLogin(partForm[Pipe]))
 
-	http.HandleFunc("GET /{$}", requireLogin(cartPage))
+	http.HandleFunc("GET /{$}", requireLogin(index))
 	http.HandleFunc("POST /remove", requireLogin(removePart))
 	http.HandleFunc("POST /submit", requireLogin(submitOrder(recordOrder)))
 	go func() {
