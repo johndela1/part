@@ -138,6 +138,16 @@ func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 	}
 }
+func loginPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
+	fmt.Fprint(w, `<form method="post" action="/login">
+	<input name="username" placeholder="username" required autofocus><br>
+        <input name="password" type="password" placeholder="password" required><br>
+        <button type="submit">login</button>
+    </form>`)
+}
+
 func main() {
 	ordersLog := log.New(os.Stderr, "", log.LstdFlags)
 	ordersFile, err := os.OpenFile("orders.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
@@ -168,15 +178,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	http.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
-		fmt.Fprint(w, `<form method="post" action="/login">
-	<input name="username" placeholder="username" required autofocus><br>
-        <input name="password" type="password" placeholder="password" required><br>
-        <button type="submit">login</button>
-    </form>`)
-	})
+	http.HandleFunc("GET /login", loginPage)
 
 	http.HandleFunc("POST /login", func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
