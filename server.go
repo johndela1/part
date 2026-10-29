@@ -141,7 +141,7 @@ func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 func login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
-	fmt.Fprint(w, `<form method="post" action="/login">
+	io.WriteString(w, `<form method="post" action="/login">
 	<input name="username" placeholder="username" required autofocus><br>
         <input name="password" type="password" placeholder="password" required><br>
         <button type="submit">login</button>
@@ -177,7 +177,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	fmt.Fprint(w, `
+	io.WriteString(w, `
 			<!DOCTYPE html>
 			<html>
 			<body>
@@ -187,13 +187,13 @@ func index(w http.ResponseWriter, r *http.Request) {
 				</h1>
 		`)
 	for index, item := range items {
-		fmt.Fprint(w, `<form action="/remove" method="post"><p>`)
-		fmt.Fprint(w, template.HTMLEscapeString(formatPart(item)))
+		io.WriteString(w, `<form action="/remove" method="post"><p>`)
+		io.WriteString(w, template.HTMLEscapeString(formatPart(item)))
 		fmt.Fprintf(w, ` <button type="submit" name="index" value="%d">delete</button></p></form>`, index)
 	}
 
 	if len(items) > 0 {
-		fmt.Fprint(w, `
+		io.WriteString(w, `
 			<form action="/submit" method="post">
 			    <button type="submit">submit order</button>
 			</form>
