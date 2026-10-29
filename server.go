@@ -124,17 +124,14 @@ func readUsers(r io.Reader) (map[string]string, error) {
 }
 func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("sid")
-		if err != nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
+		loggedIn := false
+		if cookie, err := r.Cookie("sid"); err == nil {
+			sessionsMu.Lock()
+			_, loggedIn = sessions[cookie.Value]
+			sessionsMu.Unlock()
 		}
 
-		sessionsMu.Lock()
-		_, ok := sessions[cookie.Value]
-		sessionsMu.Unlock()
-
-		if !ok {
+		if !loggedIn {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
