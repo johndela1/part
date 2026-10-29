@@ -38,21 +38,51 @@ const (
 )
 
 type Nipple struct {
-	Size     string `form:"dropdown" label:"size" values:"close:close;1″ × 2″:1″ × 2″;1″ × 2½″:1″ × 2½″;1″ × 3″:1″ × 3″;1″ × 3½″:1″ × 3½″;1″ × 4″:1″ × 4″;1″ × 4½″:1″ × 4½″;1″ × 5″:1″ × 5″;1″ × 5½″:1″ × 5½″;1″ × 6″:1″ × 6″;1″ × 6½″:1″ × 6½″;1″ × 7″:1″ × 7″;1″ × 7½″:1″ × 7½″;1″ × 8″:1″ × 8″;1″ × 8½″:1″ × 8½″;1″ × 9″:1″ × 9″;1″ × 9½″:1″ × 9½″;1″ × 10″:1″ × 10″;1″ × 10½″:1″ × 10½″;1″ × 11″:1″ × 11″;1″ × 11½″:1″ × 11½″;1″ × 12″:1″ × 12″;" required:"true"`
-	Quantity int    `form:"input,number" label:"quantity" required:"true" min:"1"`
+	Size     string
+	Quantity int
+}
+
+var nippleSizes = []string{
+	"close",
+	"1″ × 2″",
+	"1″ × 2½″",
+	"1″ × 3″",
+	"1″ × 3½″",
+	"1″ × 4″",
+	"1″ × 4½″",
+	"1″ × 5″",
+	"1″ × 5½″",
+	"1″ × 6″",
+	"1″ × 6½″",
+	"1″ × 7″",
+	"1″ × 7½″",
+	"1″ × 8″",
+	"1″ × 8½″",
+	"1″ × 9″",
+	"1″ × 9½″",
+	"1″ × 10″",
+	"1″ × 10½″",
+	"1″ × 11″",
+	"1″ × 11½″",
+	"1″ × 12″",
+	"",
 }
 
 type Pipe struct {
-	ThicknessType string `form:"dropdown" label:"thickness type" values:"SCH 10:sch 10;SCH 40:sch 40"`
-	CoatingType   string `form:"dropdown" label:"coating type" values:"Regular:regular;Galvanized:galvanized"`
-	EndType       string `form:"dropdown" label:"end type" values:"Plain End:plain end;Threaded:threaded;Grooved:grooved"`
-	Size          string `form:"dropdown" label:"size" values:"8″:8″;6″:6″;4″:4″;3″:3″;2½″:2½″;2″:2″;1½″:1½″;1¼″:1¼″;1″:1″"`
-	Quantity      int    `form:"input,number" label:"quantity" required:"true" min:"1"`
+	ThicknessType string
+	CoatingType   string
+	EndType       string
+	Size          string
+	Quantity      int
 }
 
 type MechanicalTee struct {
-	Size     string `form:"dropdown" label:"size" values:"8″ × 4″:8″ × 4″;8″ × 3″:8″ × 3″;8″ × 2½″:8″ × 2½″;8″ × 2″:8″ × 2″;8″ × 1½″:8″ × 1½″;8″ × 1¼″:8″ × 1¼″;8″ × 1″:8″ × 1″;6″ × 4″:6″ × 4″;6″ × 3″:6″ × 3″;6″ × 2½″:6″ × 2½″;6″ × 2″:6″ × 2″;6″ × 1½″:6″ × 1½″;6″ × 1¼″:6″ × 1¼″;6″ × 1″:6″ × 1″;6″ × ¾″:6″ × ¾″;4″ × 2½″:4″ × 2½″;4″ × 2″:4″ × 2″;4″ × 1½″:4″ × 1½″;4″ × 1¼″:4″ × 1¼″;4″ × 1″:4″ × 1″;4″ × ¾″:4″ × ¾″;3″ × 2″:3″ × 2″;3″ × 1½″:3″ × 1½″;3″ × 1¼″:3″ × 1¼″;3″ × 1″:3″ × 1″;3″ × ¾″:3″ × ¾″;2½″ × 1½″:2½″ × 1½″;2½″ × 1¼″:2½″ × 1¼″;2½″ × 1″:2½″ × 1″;2½″ × ¾″:2½″ × ¾″;2″ × 1¼″:2″ × 1¼″;2″ × 1″:2″ × 1″;2″ × ¾″:2″ × ¾″;2″ × ½″:2″ × ½″" required:"true"`
-	Quantity int    `form:"input,number" label:"quantity" required:"true" min:"1"`
+	Size     string
+	Quantity int
+}
+
+func fieldLabel(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, "Type", " type"))
 }
 
 func formatPart(part any) string {
@@ -61,103 +91,159 @@ func formatPart(part any) string {
 	var fields []string
 	for index := range value.NumField() {
 		field := partType.Field(index)
-		label := field.Tag.Get("label")
+		label := fieldLabel(field.Name)
 		fields = append(fields, fmt.Sprintf("%s: %v", label, value.Field(index).Interface()))
 	}
 	return strings.ToLower(partType.Name() + ": " + strings.Join(fields, ", "))
 }
 
-func mapForm[T any](r *http.Request, part *T) {
-	value := reflect.ValueOf(part).Elem()
-	partType := value.Type()
-	for index := range value.NumField() {
-		field := value.Field(index)
-		text := r.FormValue(partType.Field(index).Name)
-		switch field.Kind() {
-		case reflect.String:
-			field.SetString(text)
-		case reflect.Int:
-			if number, err := strconv.ParseInt(text, 10, 64); err == nil {
-				field.SetInt(number)
-			}
-		}
-	}
-}
-
-func validateRequired(value string, required bool) error {
-	if required && value == "" {
-		return errors.New("This field is required")
-	}
-	return nil
-}
-
-func validateQuantity(quantity int) error {
-	if quantity < 1 {
-		return errors.New("Value should be greater than or equal to 1")
-	}
-	return nil
-}
-
-func validateChoice(value, choices string) error {
-	if value == "" {
-		return nil
-	}
-	allowed := slices.ContainsFunc(strings.Split(choices, ";"), func(choice string) bool {
-		key, _, _ := strings.Cut(choice, ":")
-		return strings.TrimSpace(key) == value
-	})
-	if !allowed {
-		return fmt.Errorf("Invalid value '%s' provided", value)
-	}
-	return nil
-}
-
-func validateForm[T any](r *http.Request, part *T) map[string]error {
+func mapForm[T any](r *http.Request, part *T) map[string]error {
 	errors := make(map[string]error)
 	value := reflect.ValueOf(part).Elem()
-	partType := value.Type()
 	for index := range value.NumField() {
-		field := partType.Field(index)
-		fieldValue := value.Field(index)
-		required := field.Tag.Get("required") == "true"
-		if err := validateRequired(r.FormValue(field.Name), required); err != nil {
+		field := value.Type().Field(index)
+		text := r.Form.Get(field.Name)
+		if err := validateRequired(text); err != nil {
 			errors[field.Name] = err
 			continue
 		}
-		var err error
-		switch fieldValue.Kind() {
+		switch value.Field(index).Kind() {
 		case reflect.String:
-			err = validateChoice(fieldValue.String(), field.Tag.Get("values"))
+			if err := validateChoice(text, choicesFor(*part, field.Name)); err != nil {
+				errors[field.Name] = err
+				continue
+			}
+			value.Field(index).SetString(text)
 		case reflect.Int:
-			err = validateQuantity(int(fieldValue.Int()))
-		}
-		if err != nil {
-			errors[field.Name] = err
+			quantity, err := parseQuantity(text)
+			if err != nil {
+				errors[field.Name] = err
+				continue
+			}
+			value.Field(index).SetInt(int64(quantity))
 		}
 	}
 	return errors
 }
 
-type formChoice struct {
-	Value, Label string
+func validateRequired(value string) error {
+	if value == "" {
+		return errors.New("This field is required")
+	}
+	return nil
+}
+
+func parseQuantity(text string) (int, error) {
+	quantity, err := strconv.Atoi(text)
+	if err != nil {
+		return 0, errors.New("Quantity must be a whole number within the supported range")
+	}
+	if quantity < 1 {
+		return 0, errors.New("Value should be greater than or equal to 1")
+	}
+	return quantity, nil
+}
+
+func validateChoice(value string, choices []string) error {
+	if !slices.Contains(choices, value) {
+		return fmt.Errorf("Invalid value '%s' provided", value)
+	}
+	return nil
+}
+
+var pipeChoices = map[string][]string{
+	"ThicknessType": {
+		"sch 10",
+		"sch 40",
+	},
+	"CoatingType": {
+		"regular",
+		"galvanized",
+	},
+	"EndType": {
+		"plain end",
+		"threaded",
+		"grooved",
+	},
+	"Size": {
+		"8″",
+		"6″",
+		"4″",
+		"3″",
+		"2½″",
+		"2″",
+		"1½″",
+		"1¼″",
+		"1″",
+	},
+}
+
+var mechanicalTeeSizes = []string{
+	"8″ × 4″",
+	"8″ × 3″",
+	"8″ × 2½″",
+	"8″ × 2″",
+	"8″ × 1½″",
+	"8″ × 1¼″",
+	"8″ × 1″",
+	"6″ × 4″",
+	"6″ × 3″",
+	"6″ × 2½″",
+	"6″ × 2″",
+	"6″ × 1½″",
+	"6″ × 1¼″",
+	"6″ × 1″",
+	"6″ × ¾″",
+	"4″ × 2½″",
+	"4″ × 2″",
+	"4″ × 1½″",
+	"4″ × 1¼″",
+	"4″ × 1″",
+	"4″ × ¾″",
+	"3″ × 2″",
+	"3″ × 1½″",
+	"3″ × 1¼″",
+	"3″ × 1″",
+	"3″ × ¾″",
+	"2½″ × 1½″",
+	"2½″ × 1¼″",
+	"2½″ × 1″",
+	"2½″ × ¾″",
+	"2″ × 1¼″",
+	"2″ × 1″",
+	"2″ × ¾″",
+	"2″ × ½″",
+}
+
+func choicesFor(part any, field string) []string {
+	switch part.(type) {
+	case Nipple:
+		return nippleSizes
+	case Pipe:
+		return pipeChoices[field]
+	case MechanicalTee:
+		return mechanicalTeeSizes
+	}
+	return nil
 }
 
 type formField struct {
-	Name, Label, Value string
-	Required           bool
-	Choices            []formChoice
-	Error              error
+	Name, Value string
+	Choices     []string
+	Error       error
 }
 
-var partTemplate = template.Must(template.New("part").Parse(`
+var partTemplate = template.Must(template.New("part").Funcs(template.FuncMap{
+	"label": fieldLabel,
+}).Parse(`
 <form action="{{.Target}}" method="post">
 {{range .Fields}}
 <div>
-  <label for="{{.Name}}">{{.Label}}{{if .Required}} <span aria-hidden="true">*</span>{{end}}</label>
+  <label for="{{.Name}}">{{label .Name}} <span aria-hidden="true">*</span></label>
   {{if .Choices}}
-  <select id="{{.Name}}" name="{{.Name}}" {{if .Required}}required{{end}}>
+  <select id="{{.Name}}" name="{{.Name}}" required>
     {{$value := .Value}}{{range .Choices}}
-    <option value="{{.Value}}" {{if eq $value .Value}}selected{{end}}>{{.Label}}</option>
+    <option value="{{.}}" {{if eq $value .}}selected{{end}}>{{.}}</option>
     {{end}}
   </select>
   {{else}}
@@ -175,10 +261,13 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	var errors map[string]error
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	if r.Method == http.MethodPost {
-		mapForm(r, &part)
-		log.Printf("post %s", formatPart(part))
-		errors = validateForm(r, &part)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			return
+		}
+		errors = mapForm(r, &part)
 		if len(errors) == 0 {
+			log.Printf("post %s", formatPart(part))
 			id := sessionID(w, r)
 			cartsMu.Lock()
 			carts[id] = append(carts[id], part)
@@ -193,21 +282,15 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	for index := range value.NumField() {
 		field := value.Type().Field(index)
 		input := formField{
-			Name: field.Name, Label: field.Tag.Get("label"),
-			Value:    fmt.Sprint(value.Field(index).Interface()),
-			Required: field.Tag.Get("required") == "true",
-			Error:    errors[field.Name],
+			Name:  field.Name,
+			Value: fmt.Sprint(value.Field(index).Interface()),
+			Error: errors[field.Name],
+		}
+		if r.Method == http.MethodPost {
+			input.Value = r.Form.Get(field.Name)
 		}
 		if value.Field(index).Kind() == reflect.String {
-			for choice := range strings.SplitSeq(field.Tag.Get("values"), ";") {
-				key, label, found := strings.Cut(choice, ":")
-				if !found {
-					label = key
-				}
-				input.Choices = append(input.Choices, formChoice{
-					Value: strings.TrimSpace(key), Label: strings.TrimSpace(label),
-				})
-			}
+			input.Choices = choicesFor(part, field.Name)
 		}
 		fields = append(fields, input)
 	}
