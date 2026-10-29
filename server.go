@@ -83,11 +83,7 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 		log.Printf("post %s", formatPart(part))
 		errors = renderer.ValidateForm(&part)
 		if len(errors) == 0 {
-			id, err := sessionID(w, r)
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
+			id := sessionID(w, r)
 			cartsMu.Lock()
 			carts[id] = append(carts[id], part)
 			cartsMu.Unlock()
@@ -193,11 +189,7 @@ func main() {
 			return
 		}
 
-		id, err := sessionID(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
+		id := sessionID(w, r)
 
 		sessionsMu.Lock()
 		sessions[id] = username
@@ -212,11 +204,7 @@ func main() {
 
 	http.HandleFunc("GET /{$}", requireLogin(func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
-		id, err := sessionID(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
+		id := sessionID(w, r)
 
 		cartsMu.Lock()
 		items := slices.Clone(carts[id])
@@ -251,11 +239,7 @@ func main() {
 		}
 	}))
 	http.HandleFunc("POST /remove", requireLogin(func(w http.ResponseWriter, r *http.Request) {
-		id, err := sessionID(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
+		id := sessionID(w, r)
 		index, err := strconv.Atoi(r.FormValue("index"))
 		if err != nil {
 			http.Error(w, err.Error(), 400)
@@ -274,11 +258,7 @@ func main() {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}))
 	http.HandleFunc("POST /submit", requireLogin(func(w http.ResponseWriter, r *http.Request) {
-		id, err := sessionID(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
+		id := sessionID(w, r)
 
 		cartsMu.Lock()
 		cart := carts[id]
@@ -302,7 +282,7 @@ func main() {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
 		}
 		auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
-		err = smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte("subject: order alert\n\n"+parts+"\nrequester: "+username))
+		err := smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte("subject: order alert\n\n"+parts+"\nrequester: "+username))
 		status := "sent"
 		if err != nil {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
@@ -353,20 +333,18 @@ func main() {
 	))
 }
 
-func sessionID(w http.ResponseWriter, r *http.Request) (string, error) {
+func sessionID(w http.ResponseWriter, r *http.Request) string {
 	if c, err := r.Cookie("sid"); err == nil {
-		return c.Value, nil
+		return c.Value
 	}
 
 	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
+	rand.Read(b)
 
 	id := hex.EncodeToString(b)
 	http.SetCookie(w, &http.Cookie{
 		Name: "sid", Value: id, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,
 	})
-	return id, nil
+	return id
 }
