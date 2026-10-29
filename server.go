@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -16,8 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/donseba/go-form/v2"
 )
 
 var (
@@ -85,19 +84,100 @@ func mapForm[T any](r *http.Request, part *T) {
 	}
 }
 
+func validateRequired(value string, required bool) error {
+	if required && value == "" {
+		return errors.New("This field is required")
+	}
+	return nil
+}
+
+func validateQuantity(quantity int) error {
+	if quantity < 1 {
+		return errors.New("Value should be greater than or equal to 1")
+	}
+	return nil
+}
+
+func validateChoice(value, choices string) error {
+	if value == "" {
+		return nil
+	}
+	allowed := slices.ContainsFunc(strings.Split(choices, ";"), func(choice string) bool {
+		key, _, _ := strings.Cut(choice, ":")
+		return strings.TrimSpace(key) == value
+	})
+	if !allowed {
+		return fmt.Errorf("Invalid value '%s' provided", value)
+	}
+	return nil
+}
+
+func validateForm[T any](r *http.Request, part *T) map[string]error {
+	errors := make(map[string]error)
+	value := reflect.ValueOf(part).Elem()
+	partType := value.Type()
+	for index := range value.NumField() {
+		field := partType.Field(index)
+		fieldValue := value.Field(index)
+		required := field.Tag.Get("required") == "true"
+		if err := validateRequired(r.FormValue(field.Name), required); err != nil {
+			errors[field.Name] = err
+			continue
+		}
+		var err error
+		switch fieldValue.Kind() {
+		case reflect.String:
+			err = validateChoice(fieldValue.String(), field.Tag.Get("values"))
+		case reflect.Int:
+			err = validateQuantity(int(fieldValue.Int()))
+		}
+		if err != nil {
+			errors[field.Name] = err
+		}
+	}
+	return errors
+}
+
+type formChoice struct {
+	Value, Label string
+}
+
+type formField struct {
+	Name, Label, Value string
+	Required           bool
+	Choices            []formChoice
+	Error              error
+}
+
+var partTemplate = template.Must(template.New("part").Parse(`
+<form action="{{.Target}}" method="post">
+{{range .Fields}}
+<div>
+  <label for="{{.Name}}">{{.Label}}{{if .Required}} <span aria-hidden="true">*</span>{{end}}</label>
+  {{if .Choices}}
+  <select id="{{.Name}}" name="{{.Name}}" {{if .Required}}required{{end}}>
+    {{$value := .Value}}{{range .Choices}}
+    <option value="{{.Value}}" {{if eq $value .Value}}selected{{end}}>{{.Label}}</option>
+    {{end}}
+  </select>
+  {{else}}
+  <input type="number" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}" min="1" required>
+  {{end}}
+  {{with .Error}}<div role="alert">{{.}}</div>{{end}}
+</div>
+{{end}}
+<button type="submit">save part</button>
+</form>
+`))
+
 func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	var part T
-	var errors form.FieldErrors
-	renderer := form.NewForm()
-	renderer.SetTheme("plain")
+	var errors map[string]error
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	if r.Method == http.MethodPost {
-		if err := form.MapForm(r, &part); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+		mapForm(r, &part)
 		log.Printf("post %s", formatPart(part))
-		errors = renderer.ValidateForm(&part)
+		errors = validateForm(r, &part)
 		if len(errors) == 0 {
 			id := sessionID(w, r)
 			cartsMu.Lock()
@@ -108,19 +188,39 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	model := form.WithRequestInfo(r, part, form.Info{
-		Target: r.URL.Path, Method: "post", SubmitText: "save part",
-	})
+	var fields []formField
+	value := reflect.ValueOf(part)
+	for index := range value.NumField() {
+		field := value.Type().Field(index)
+		input := formField{
+			Name: field.Name, Label: field.Tag.Get("label"),
+			Value:    fmt.Sprint(value.Field(index).Interface()),
+			Required: field.Tag.Get("required") == "true",
+			Error:    errors[field.Name],
+		}
+		if value.Field(index).Kind() == reflect.String {
+			for choice := range strings.SplitSeq(field.Tag.Get("values"), ";") {
+				key, label, found := strings.Cut(choice, ":")
+				if !found {
+					label = key
+				}
+				input.Choices = append(input.Choices, formChoice{
+					Value: strings.TrimSpace(key), Label: strings.TrimSpace(label),
+				})
+			}
+		}
+		fields = append(fields, input)
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if len(errors) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
-	page := template.Must(template.New("part").Funcs(renderer.FuncMap()).Parse(
-		`{{ form_render .Form .Errors }}`,
-	))
-	if err := page.Execute(w, map[string]any{
-		"Form": model, "Errors": errors,
+	if err := partTemplate.Execute(w, struct {
+		Target string
+		Fields []formField
+	}{
+		Target: r.URL.Path, Fields: fields,
 	}); err != nil {
 		log.Println(err)
 	}
