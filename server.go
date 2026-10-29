@@ -250,7 +250,13 @@ func submitOrder(recordOrder func(string, ...any) error) http.HandlerFunc {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
 		}
 		auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
-		err := smtp.SendMail(smtpServer+":"+smtpPort, auth, senderMail, to, []byte("subject: order alert\n\n"+parts+"\nrequester: "+username))
+		err := smtp.SendMail(
+			smtpServer+":"+smtpPort,
+			auth,
+			senderMail,
+			to,
+			[]byte("subject: order alert\n\n"+parts+"\nrequester: "+username),
+		)
 		status := "sent"
 		if err != nil {
 			log.Printf("ERROR %s: %q", orderID, err.Error())
