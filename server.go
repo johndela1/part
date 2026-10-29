@@ -210,20 +210,6 @@ func main() {
 	http.HandleFunc("GET /pipe", requireLogin(partForm[Pipe]))
 	http.HandleFunc("POST /pipe", requireLogin(partForm[Pipe]))
 
-	http.HandleFunc("/old", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, `
-			<!DOCTYPE html>
-			<html>
-			<body>
-				<h1>
-				<a href="./nipple">nipple</a><br>
-				<a href="./pipe">pipe</a><br>
-				</h1>
-			</body>
-			</html>
-		`)
-	})
 	http.HandleFunc("GET /{$}", requireLogin(func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 		id, err := sessionID(w, r)
@@ -233,7 +219,7 @@ func main() {
 		}
 
 		cartsMu.Lock()
-		items := append([]any(nil), carts[id]...)
+		items := slices.Clone(carts[id])
 		cartsMu.Unlock()
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
