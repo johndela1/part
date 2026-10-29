@@ -51,6 +51,11 @@ type Pipe struct {
 	Quantity      int    `form:"input,number" label:"quantity" required:"true" min:"1"`
 }
 
+type MechanicalTee struct {
+	Size     string `form:"dropdown" label:"size" values:"8\" × 4\":8\" × 4\";8\" × 3\":8\" × 3\";8\" × 2½\":8\" × 2½\";8\" × 2\":8\" × 2\";8\" × 1½\":8\" × 1½\";8\" × 1¼\":8\" × 1¼\";8\" × 1\":8\" × 1\";6\" × 4\":6\" × 4\";6\" × 3\":6\" × 3\";6\" × 2½\":6\" × 2½\";6\" × 2\":6\" × 2\";6\" × 1½\":6\" × 1½\";6\" × 1¼\":6\" × 1¼\";6\" × 1\":6\" × 1\";6\" × ¾\":6\" × ¾\";4\" × 2½\":4\" × 2½\";4\" × 2\":4\" × 2\";4\" × 1½\":4\" × 1½\";4\" × 1¼\":4\" × 1¼\";4\" × 1\":4\" × 1\";4\" × ¾\":4\" × ¾\";3\" × 2\":3\" × 2\";3\" × 1½\":3\" × 1½\";3\" × 1¼\":3\" × 1¼\";3\" × 1\":3\" × 1\";3\" × ¾\":3\" × ¾\";2½\" × 1½\":2½\" × 1½\";2½\" × 1¼\":2½\" × 1¼\";2½\" × 1\":2½\" × 1\";2½\" × ¾\":2½\" × ¾\";2\" × 1¼\":2\" × 1¼\";2\" × 1\":2\" × 1\";2\" × ¾\":2\" × ¾\";2\" × ½\":2\" × ½\"" required:"true"`
+	Quantity int    `form:"input,number" label:"quantity" required:"true" min:"1"`
+}
+
 func formatPart(part any) string {
 	value := reflect.ValueOf(part)
 	partType := value.Type()
@@ -178,6 +183,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 				<h1>
 				<a href="./nipple">nipple</a><br>
 				<a href="./pipe">pipe</a><br>
+				<a href="./mechanical-tee">mechanical tees</a><br>
 				</h1>
 		`)
 	for index, item := range items {
@@ -343,6 +349,8 @@ func main() {
 	http.HandleFunc("POST /nipple", requireLogin(partForm[Nipple]))
 	http.HandleFunc("GET /pipe", requireLogin(partForm[Pipe]))
 	http.HandleFunc("POST /pipe", requireLogin(partForm[Pipe]))
+	http.HandleFunc("GET /mechanical-tee", requireLogin(partForm[MechanicalTee]))
+	http.HandleFunc("POST /mechanical-tee", requireLogin(partForm[MechanicalTee]))
 
 	http.HandleFunc("GET /{$}", requireLogin(index))
 	http.HandleFunc("POST /remove", requireLogin(removePart))
