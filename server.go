@@ -39,7 +39,7 @@ const (
 )
 
 type Nipple struct {
-	Size     string `form:"dropdown" label:"size" values:"close:close;1x2:1x2;1x2½:1x2½;1x3:1x3;1x3½:1x3½;1x4:1x4;1x4½:1x4½;1X5:1x5;1x5½:1x5½;1x6:1x6;1x6½:1x6½;1x7:1x7;1x7½:1x7½;1x8:1x8;1x8½:1x8½;1x9:1x9;1x9½:1x9½;1x10:1x10;1x10½:1x10½;1x11:1x11;1x11½:1x11½;1x12:1x12;" required:"true"`
+	Size     string `form:"dropdown" label:"size" values:"close:close;1″ × 2″:1″ × 2″;1″ × 2½″:1″ × 2½″;1″ × 3″:1″ × 3″;1″ × 3½″:1″ × 3½″;1″ × 4″:1″ × 4″;1″ × 4½″:1″ × 4½″;1″ × 5″:1″ × 5″;1″ × 5½″:1″ × 5½″;1″ × 6″:1″ × 6″;1″ × 6½″:1″ × 6½″;1″ × 7″:1″ × 7″;1″ × 7½″:1″ × 7½″;1″ × 8″:1″ × 8″;1″ × 8½″:1″ × 8½″;1″ × 9″:1″ × 9″;1″ × 9½″:1″ × 9½″;1″ × 10″:1″ × 10″;1″ × 10½″:1″ × 10½″;1″ × 11″:1″ × 11″;1″ × 11½″:1″ × 11½″;1″ × 12″:1″ × 12″;" required:"true"`
 	Quantity int    `form:"input,number" label:"quantity" required:"true" min:"1"`
 }
 
@@ -47,12 +47,12 @@ type Pipe struct {
 	ThicknessType string `form:"dropdown" label:"thickness type" values:"SCH 10:sch 10;SCH 40:sch 40"`
 	CoatingType   string `form:"dropdown" label:"coating type" values:"Regular:regular;Galvanized:galvanized"`
 	EndType       string `form:"dropdown" label:"end type" values:"Plain End:plain end;Threaded:threaded;Grooved:grooved"`
-	Size          string `form:"dropdown" label:"size" values:"8”:8”;6”:6”;4”:4”;3”:3”;2½”:2½”;2”:2”;1½”:1½”;1¼”:1¼”;1”:1”"`
+	Size          string `form:"dropdown" label:"size" values:"8″:8″;6″:6″;4″:4″;3″:3″;2½″:2½″;2″:2″;1½″:1½″;1¼″:1¼″;1″:1″"`
 	Quantity      int    `form:"input,number" label:"quantity" required:"true" min:"1"`
 }
 
 type MechanicalTee struct {
-	Size     string `form:"dropdown" label:"size" values:"8\" × 4\":8\" × 4\";8\" × 3\":8\" × 3\";8\" × 2½\":8\" × 2½\";8\" × 2\":8\" × 2\";8\" × 1½\":8\" × 1½\";8\" × 1¼\":8\" × 1¼\";8\" × 1\":8\" × 1\";6\" × 4\":6\" × 4\";6\" × 3\":6\" × 3\";6\" × 2½\":6\" × 2½\";6\" × 2\":6\" × 2\";6\" × 1½\":6\" × 1½\";6\" × 1¼\":6\" × 1¼\";6\" × 1\":6\" × 1\";6\" × ¾\":6\" × ¾\";4\" × 2½\":4\" × 2½\";4\" × 2\":4\" × 2\";4\" × 1½\":4\" × 1½\";4\" × 1¼\":4\" × 1¼\";4\" × 1\":4\" × 1\";4\" × ¾\":4\" × ¾\";3\" × 2\":3\" × 2\";3\" × 1½\":3\" × 1½\";3\" × 1¼\":3\" × 1¼\";3\" × 1\":3\" × 1\";3\" × ¾\":3\" × ¾\";2½\" × 1½\":2½\" × 1½\";2½\" × 1¼\":2½\" × 1¼\";2½\" × 1\":2½\" × 1\";2½\" × ¾\":2½\" × ¾\";2\" × 1¼\":2\" × 1¼\";2\" × 1\":2\" × 1\";2\" × ¾\":2\" × ¾\";2\" × ½\":2\" × ½\"" required:"true"`
+	Size     string `form:"dropdown" label:"size" values:"8″ × 4″:8″ × 4″;8″ × 3″:8″ × 3″;8″ × 2½″:8″ × 2½″;8″ × 2″:8″ × 2″;8″ × 1½″:8″ × 1½″;8″ × 1¼″:8″ × 1¼″;8″ × 1″:8″ × 1″;6″ × 4″:6″ × 4″;6″ × 3″:6″ × 3″;6″ × 2½″:6″ × 2½″;6″ × 2″:6″ × 2″;6″ × 1½″:6″ × 1½″;6″ × 1¼″:6″ × 1¼″;6″ × 1″:6″ × 1″;6″ × ¾″:6″ × ¾″;4″ × 2½″:4″ × 2½″;4″ × 2″:4″ × 2″;4″ × 1½″:4″ × 1½″;4″ × 1¼″:4″ × 1¼″;4″ × 1″:4″ × 1″;4″ × ¾″:4″ × ¾″;3″ × 2″:3″ × 2″;3″ × 1½″:3″ × 1½″;3″ × 1¼″:3″ × 1¼″;3″ × 1″:3″ × 1″;3″ × ¾″:3″ × ¾″;2½″ × 1½″:2½″ × 1½″;2½″ × 1¼″:2½″ × 1¼″;2½″ × 1″:2½″ × 1″;2½″ × ¾″:2½″ × ¾″;2″ × 1¼″:2″ × 1¼″;2″ × 1″:2″ × 1″;2″ × ¾″:2″ × ¾″;2″ × ½″:2″ × ½″" required:"true"`
 	Quantity int    `form:"input,number" label:"quantity" required:"true" min:"1"`
 }
 
