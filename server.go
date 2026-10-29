@@ -61,9 +61,6 @@ func formatPart(part any) string {
 			continue
 		}
 		label := field.Tag.Get("label")
-		if label == "" {
-			label = field.Name
-		}
 		fields = append(fields, fmt.Sprintf("%s: %v", label, value.Field(index).Interface()))
 	}
 	return strings.ToLower(partType.Name() + ": " + strings.Join(fields, ", "))
