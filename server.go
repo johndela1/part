@@ -259,7 +259,6 @@ var partTemplate = template.Must(template.New("part").Funcs(template.FuncMap{
 func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	var part T
 	var errors map[string]error
-	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Invalid form data", http.StatusBadRequest)
@@ -323,13 +322,15 @@ func readUsers(r io.Reader) (map[string]string, error) {
 }
 func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var username string
 		loggedIn := false
 		if cookie, err := r.Cookie("sid"); err == nil {
 			sessionsMu.Lock()
-			_, loggedIn = sessions[cookie.Value]
+			username, loggedIn = sessions[cookie.Value]
 			sessionsMu.Unlock()
 		}
 
+		log.Printf("%s %s %s user=%q", r.Method, r.URL.Path, r.RemoteAddr, username)
 		if !loggedIn {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
@@ -367,7 +368,6 @@ func authenticate(users map[string]string) http.HandlerFunc {
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 	id := sessionID(w, r)
 
 	cartsMu.Lock()
