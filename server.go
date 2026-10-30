@@ -80,6 +80,22 @@ type MechanicalTee struct {
 	Quantity int
 }
 
+type PipeStand struct {
+	Size     string
+	Quantity int
+}
+
+var pipeStandSizes = []string{
+	"6″",
+	"4″",
+	"3″",
+	"2½″",
+	"2″",
+	"1½″",
+	"1¼″",
+	"1″",
+}
+
 func fieldLabel(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, "Type", " type"))
 }
@@ -222,6 +238,8 @@ func choicesFor(part any, field string) []string {
 		return pipeChoices[field]
 	case MechanicalTee:
 		return mechanicalTeeSizes
+	case PipeStand:
+		return pipeStandSizes
 	}
 	return nil
 }
@@ -390,6 +408,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 				<a href="./nipple">nipple</a><br>
 				<a href="./pipe">pipe</a><br>
 				<a href="./mechanical-tee">mechanical tees</a><br>
+				<a href="./pipe-stand">pipe stands</a><br>
 				</h1>
 		`)
 	for index, item := range items {
@@ -571,6 +590,8 @@ func main() {
 	http.HandleFunc("POST /pipe", requireLogin(partForm[Pipe]))
 	http.HandleFunc("GET /mechanical-tee", requireLogin(partForm[MechanicalTee]))
 	http.HandleFunc("POST /mechanical-tee", requireLogin(partForm[MechanicalTee]))
+	http.HandleFunc("GET /pipe-stand", requireLogin(partForm[PipeStand]))
+	http.HandleFunc("POST /pipe-stand", requireLogin(partForm[PipeStand]))
 
 	http.HandleFunc("GET /{$}", requireLogin(index))
 	http.HandleFunc("POST /remove", requireLogin(removePart))
