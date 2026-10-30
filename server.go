@@ -65,7 +65,6 @@ var nippleSizes = []string{
 	"1″ × 11″",
 	"1″ × 11½″",
 	"1″ × 12″",
-	"",
 }
 
 type Pipe struct {
@@ -254,6 +253,11 @@ var partTemplate = template.Must(template.New("part").Funcs(template.FuncMap{
 {{end}}
 <button type="submit">save part</button>
 </form>
+{{if .Initial}}
+<script>
+document.querySelectorAll('select').forEach(select => select.selectedIndex = -1);
+</script>
+{{end}}
 `))
 
 func partForm[T any](w http.ResponseWriter, r *http.Request) {
@@ -299,10 +303,12 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := partTemplate.Execute(w, struct {
-		Target string
-		Fields []formField
+		Target  string
+		Fields  []formField
+		Initial bool
 	}{
 		Target: r.URL.Path, Fields: fields,
+		Initial: r.Method == http.MethodGet,
 	}); err != nil {
 		log.Println(err)
 	}
