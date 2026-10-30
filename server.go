@@ -446,6 +446,7 @@ func submitOrder(recordOrder func(string, ...any) error) http.HandlerFunc {
 		for _, item := range cart {
 			parts += formatPart(item) + "\n"
 		}
+		delete(carts, id)
 		cartsMu.Unlock()
 
 		sessionsMu.Lock()
@@ -477,13 +478,12 @@ func submitOrder(recordOrder func(string, ...any) error) http.HandlerFunc {
 			log.Printf("ERROR %s: email %q: %q", orderID, status, logErr.Error())
 		}
 		if err != nil {
+			cartsMu.Lock()
+			carts[id] = append(cart, carts[id]...)
+			cartsMu.Unlock()
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		cartsMu.Lock()
-		delete(carts, id)
-		cartsMu.Unlock()
 
 		io.WriteString(w, `
 			<!DOCTYPE html>
