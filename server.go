@@ -445,37 +445,32 @@ type order struct {
 	items               []any
 }
 
-func takeCart(id string) (order, bool) {
-	cartsMu.Lock()
-	cart := carts[id]
-	if len(cart) == 0 {
-		cartsMu.Unlock()
-		return order{}, false
-	}
-
+func newOrder(items []any, username string) order {
 	var parts string
-	for _, item := range cart {
+	for _, item := range items {
 		parts += formatPart(item) + "\n"
 	}
-	delete(carts, id)
-	cartsMu.Unlock()
-
-	sessionsMu.Lock()
-	username := sessions[id]
-	sessionsMu.Unlock()
 	return order{
-		id: rand.Text(), username: username, parts: parts, items: cart,
-	}, true
+		id: rand.Text(), username: username, parts: parts, items: items,
+	}
 }
 
 func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := sessionID(w, r)
-		o, ok := takeCart(id)
-		if !ok {
+		cartsMu.Lock()
+		items := carts[id]
+		delete(carts, id)
+		cartsMu.Unlock()
+		if len(items) == 0 {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
+
+		sessionsMu.Lock()
+		username := sessions[id]
+		sessionsMu.Unlock()
+		o := newOrder(items, username)
 
 		if err := recordOrder(
 			"%s: submitted by %q: %q",
