@@ -22,7 +22,7 @@ import (
 var (
 	sessions   = make(map[string]string)
 	sessionsMu sync.Mutex
-	carts      = make(map[string][]any)
+	carts      = make(map[string][]part)
 	cartsMu    sync.Mutex
 
 	to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
@@ -37,9 +37,17 @@ const (
 	senderMail = "john@jjdev.com"
 )
 
+type part interface {
+	choices(string) []string
+}
+
 type Nipple struct {
 	Size     string
 	Quantity int
+}
+
+func (Nipple) choices(string) []string {
+	return nippleSizes
 }
 
 var nippleSizes = []string{
@@ -75,14 +83,26 @@ type Pipe struct {
 	Quantity      int
 }
 
+func (Pipe) choices(field string) []string {
+	return pipeChoices[field]
+}
+
 type MechanicalTee struct {
 	Size     string
 	Quantity int
 }
 
+func (MechanicalTee) choices(string) []string {
+	return mechanicalTeeSizes
+}
+
 type PipeStand struct {
 	Size     string
 	Quantity int
+}
+
+func (PipeStand) choices(string) []string {
+	return pipeStandSizes
 }
 
 var pipeStandSizes = []string{
@@ -100,8 +120,8 @@ func fieldLabel(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, "Type", " type"))
 }
 
-func formatPart(part any) string {
-	value := reflect.ValueOf(part)
+func formatPart(p part) string {
+	value := reflect.ValueOf(p)
 	partType := value.Type()
 	var fields []string
 	for index := range value.NumField() {
@@ -112,7 +132,7 @@ func formatPart(part any) string {
 	return strings.ToLower(partType.Name() + ": " + strings.Join(fields, ", "))
 }
 
-func mapForm[T any](r *http.Request, part *T) map[string]error {
+func mapForm[T part](r *http.Request, part *T) map[string]error {
 	errors := make(map[string]error)
 	value := reflect.ValueOf(part).Elem()
 	for index := range value.NumField() {
@@ -124,7 +144,7 @@ func mapForm[T any](r *http.Request, part *T) map[string]error {
 		}
 		switch value.Field(index).Kind() {
 		case reflect.String:
-			if err := validateChoice(text, choicesFor(*part, field.Name)); err != nil {
+			if err := validateChoice(text, (*part).choices(field.Name)); err != nil {
 				errors[field.Name] = err
 				continue
 			}
@@ -230,20 +250,6 @@ var mechanicalTeeSizes = []string{
 	"2″ × ½″",
 }
 
-func choicesFor(part any, field string) []string {
-	switch part.(type) {
-	case Nipple:
-		return nippleSizes
-	case Pipe:
-		return pipeChoices[field]
-	case MechanicalTee:
-		return mechanicalTeeSizes
-	case PipeStand:
-		return pipeStandSizes
-	}
-	return nil
-}
-
 type formField struct {
 	Name, Value string
 	Choices     []string
@@ -278,7 +284,7 @@ document.querySelectorAll('select').forEach(select => select.selectedIndex = -1)
 {{end}}
 `))
 
-func partForm[T any](w http.ResponseWriter, r *http.Request) {
+func partForm[T part](w http.ResponseWriter, r *http.Request) {
 	var part T
 	var errors map[string]error
 	if r.Method == http.MethodPost {
@@ -311,7 +317,7 @@ func partForm[T any](w http.ResponseWriter, r *http.Request) {
 			input.Value = r.Form.Get(field.Name)
 		}
 		if value.Field(index).Kind() == reflect.String {
-			input.Choices = choicesFor(part, field.Name)
+			input.Choices = part.choices(field.Name)
 		}
 		fields = append(fields, input)
 	}
@@ -461,10 +467,10 @@ func sendOrder(o order) error {
 
 type order struct {
 	id, username, parts string
-	items               []any
+	items               []part
 }
 
-func newOrder(items []any, username string) order {
+func newOrder(items []part, username string) order {
 	var parts string
 	for _, item := range items {
 		parts += formatPart(item) + "\n"
