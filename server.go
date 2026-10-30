@@ -430,56 +430,74 @@ func removePart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func submitOrder(recordOrder func(string, ...any) error) http.HandlerFunc {
+func sendOrder(o order) error {
+	return smtp.SendMail(
+		smtpServer+":"+smtpPort,
+		smtp.PlainAuth("", senderMail, senderPass, smtpServer),
+		senderMail,
+		to,
+		[]byte("subject: order alert\n\n"+o.parts+"\nrequester: "+o.username),
+	)
+}
+
+type order struct {
+	id, username, parts string
+	items               []any
+}
+
+func takeCart(id string) (order, bool) {
+	cartsMu.Lock()
+	cart := carts[id]
+	if len(cart) == 0 {
+		cartsMu.Unlock()
+		return order{}, false
+	}
+
+	var parts string
+	for _, item := range cart {
+		parts += formatPart(item) + "\n"
+	}
+	delete(carts, id)
+	cartsMu.Unlock()
+
+	sessionsMu.Lock()
+	username := sessions[id]
+	sessionsMu.Unlock()
+	return order{
+		id: rand.Text(), username: username, parts: parts, items: cart,
+	}, true
+}
+
+func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := sessionID(w, r)
-
-		cartsMu.Lock()
-		cart := carts[id]
-		if len(cart) == 0 {
-			cartsMu.Unlock()
+		o, ok := takeCart(id)
+		if !ok {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
 
-		var parts string
-		for _, item := range cart {
-			parts += formatPart(item) + "\n"
-		}
-		delete(carts, id)
-		cartsMu.Unlock()
-
-		sessionsMu.Lock()
-		username := sessions[id]
-		sessionsMu.Unlock()
-		orderID := rand.Text()
 		if err := recordOrder(
 			"%s: submitted by %q: %q",
-			orderID,
-			username,
-			strings.TrimSuffix(parts, "\n"),
+			o.id,
+			o.username,
+			strings.TrimSuffix(o.parts, "\n"),
 		); err != nil {
-			log.Printf("ERROR %s: %q", orderID, err.Error())
+			log.Printf("ERROR %s: %q", o.id, err.Error())
 		}
-		auth := smtp.PlainAuth("", senderMail, senderPass, smtpServer)
-		err := smtp.SendMail(
-			smtpServer+":"+smtpPort,
-			auth,
-			senderMail,
-			to,
-			[]byte("subject: order alert\n\n"+parts+"\nrequester: "+username),
-		)
+
+		err := sendOrder(o)
 		status := "sent"
 		if err != nil {
-			log.Printf("ERROR %s: %q", orderID, err.Error())
+			log.Printf("ERROR %s: %q", o.id, err.Error())
 			status = fmt.Sprintf("failed: %v", err)
 		}
-		if logErr := recordOrder("%s: email %q", orderID, status); logErr != nil {
-			log.Printf("ERROR %s: email %q: %q", orderID, status, logErr.Error())
+		if logErr := recordOrder("%s: email %q", o.id, status); logErr != nil {
+			log.Printf("ERROR %s: email %q: %q", o.id, status, logErr.Error())
 		}
 		if err != nil {
 			cartsMu.Lock()
-			carts[id] = append(cart, carts[id]...)
+			carts[id] = append(o.items, carts[id]...)
 			cartsMu.Unlock()
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -528,6 +546,7 @@ func main() {
 		defer ordersFile.Close()
 		ordersLog.SetOutput(ordersFile)
 	}
+
 	recordOrder := func(format string, args ...any) error {
 		if err := ordersLog.Output(2, fmt.Sprintf(format, args...)); err != nil {
 			return err
@@ -560,7 +579,7 @@ func main() {
 
 	http.HandleFunc("GET /{$}", requireLogin(index))
 	http.HandleFunc("POST /remove", requireLogin(removePart))
-	http.HandleFunc("POST /submit", requireLogin(submitOrder(recordOrder)))
+	http.HandleFunc("POST /submit", requireLogin(submit(recordOrder)))
 	go func() {
 		redirect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r,
