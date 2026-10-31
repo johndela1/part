@@ -133,39 +133,32 @@ func formatPart(p part) string {
 }
 
 func mapForm[T part](r *http.Request, part *T) map[string]error {
-	errors := make(map[string]error)
+	errs := make(map[string]error)
 	value := reflect.ValueOf(part).Elem()
 	for index := range value.NumField() {
 		field := value.Type().Field(index)
 		text := r.Form.Get(field.Name)
-		if err := validateRequired(text); err != nil {
-			errors[field.Name] = err
+		if text == "" {
+			errs[field.Name] = errors.New("required")
 			continue
 		}
 		switch value.Field(index).Kind() {
 		case reflect.String:
-			if err := validateChoice(text, (*part).choices(field.Name)); err != nil {
-				errors[field.Name] = err
+			if !slices.Contains((*part).choices(field.Name), text) {
+				errs[field.Name] = fmt.Errorf("invalid value '%s' provided", text)
 				continue
 			}
 			value.Field(index).SetString(text)
 		case reflect.Int:
 			number, err := parsePositiveInt(text)
 			if err != nil {
-				errors[field.Name] = err
+				errs[field.Name] = err
 				continue
 			}
 			value.Field(index).SetInt(int64(number))
 		}
 	}
-	return errors
-}
-
-func validateRequired(value string) error {
-	if value == "" {
-		return errors.New("required")
-	}
-	return nil
+	return errs
 }
 
 func parsePositiveInt(text string) (int, error) {
@@ -177,13 +170,6 @@ func parsePositiveInt(text string) (int, error) {
 		return 0, errors.New("must be greater than 0")
 	}
 	return number, nil
-}
-
-func validateChoice(value string, choices []string) error {
-	if !slices.Contains(choices, value) {
-		return fmt.Errorf("invalid value '%s' provided", value)
-	}
-	return nil
 }
 
 var pipeChoices = map[string][]string{
