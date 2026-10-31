@@ -116,8 +116,55 @@ var pipeStandSizes = []string{
 	"1″",
 }
 
-func fieldLabel(name string) string {
-	return strings.ToLower(strings.ReplaceAll(name, "Type", " type"))
+type GroovedCoupling struct {
+	Type     string
+	Size     string
+	Quantity int
+}
+
+func (GroovedCoupling) choices(field string) []string {
+	return groovedCouplingChoices[field]
+}
+
+var groovedCouplingChoices = map[string][]string{
+	"Type": {"rigid", "flexible"},
+	"Size": {"8″", "6″", "4″", "3″", "2½″", "2″", "1½″", "1¼″", "1″"},
+}
+
+type GroovedReducingCoupling struct {
+	Size     string
+	Quantity int
+}
+
+func (GroovedReducingCoupling) choices(string) []string {
+	return groovedReducingCouplingSizes
+}
+
+var groovedReducingCouplingSizes = []string{
+	"8″ × 6″",
+	"6″ × 4″",
+	"4″ × 3″",
+	"4″ × 2½″",
+	"4″ × 2″",
+	"3″ × 2½″",
+	"3″ × 2″",
+	"2½″ × 2″",
+	"2″ × 1¼″",
+	"2″ × 1″",
+	"2″ × ½″",
+}
+
+type GroovedFlangeAdapter struct {
+	Size     string
+	Quantity int
+}
+
+func (GroovedFlangeAdapter) choices(string) []string {
+	return groovedFlangeAdapterSizes
+}
+
+var groovedFlangeAdapterSizes = []string{
+	"12″", "10″", "8″", "6″", "4″", "3″", "2½″", "2″",
 }
 
 func formatPart(p part) string {
@@ -126,10 +173,9 @@ func formatPart(p part) string {
 	var fields []string
 	for index := range value.NumField() {
 		field := partType.Field(index)
-		label := fieldLabel(field.Name)
-		fields = append(fields, fmt.Sprintf("%s: %v", label, value.Field(index).Interface()))
+		fields = append(fields, fmt.Sprintf("%s: %v", field.Name, value.Field(index).Interface()))
 	}
-	return strings.ToLower(partType.Name() + ": " + strings.Join(fields, ", "))
+	return partType.Name() + ": " + strings.Join(fields, ", ")
 }
 
 func mapForm[T part](r *http.Request, part *T) map[string]error {
@@ -242,13 +288,12 @@ type formField struct {
 	Error       error
 }
 
-var partTemplate = template.Must(template.New("part").Funcs(template.FuncMap{
-	"label": fieldLabel,
-}).Parse(`
+var partTemplate = template.Must(template.New("part").Parse(`
+<h1>{{.PartName}}</h1>
 <form action="{{.Target}}" method="post">
 {{range .Fields}}
 <div>
-  <label for="{{.Name}}">{{label .Name}}</label>
+  <label for="{{.Name}}">{{.Name}}</label>
   {{if .Choices}}
   <select id="{{.Name}}" name="{{.Name}}" required>
     {{$value := .Value}}{{range .Choices}}
@@ -313,11 +358,13 @@ func partForm[T part](w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := partTemplate.Execute(w, struct {
-		Target  string
-		Fields  []formField
-		Initial bool
+		PartName string
+		Target   string
+		Fields   []formField
+		Initial  bool
 	}{
-		Target: r.URL.Path, Fields: fields,
+		PartName: value.Type().Name(),
+		Target:   r.URL.Path, Fields: fields,
 		Initial: r.Method == http.MethodGet,
 	}); err != nil {
 		log.Println(err)
@@ -401,6 +448,9 @@ func index(w http.ResponseWriter, r *http.Request) {
 				<a href="./pipe">pipe</a><br>
 				<a href="./mechanical-tee">mechanical tees</a><br>
 				<a href="./pipe-stand">pipe stands</a><br>
+				<a href="./grooved-coupling">grooved couplings</a><br>
+				<a href="./grooved-reducing-coupling">grooved reducing couplings</a><br>
+				<a href="./grooved-flange-adapter">grooved flange adapters</a><br>
 				</h1>
 		`)
 	for index, item := range items {
@@ -582,6 +632,12 @@ func main() {
 	http.HandleFunc("POST /mechanical-tee", requireLogin(partForm[MechanicalTee]))
 	http.HandleFunc("GET /pipe-stand", requireLogin(partForm[PipeStand]))
 	http.HandleFunc("POST /pipe-stand", requireLogin(partForm[PipeStand]))
+	http.HandleFunc("GET /grooved-coupling", requireLogin(partForm[GroovedCoupling]))
+	http.HandleFunc("POST /grooved-coupling", requireLogin(partForm[GroovedCoupling]))
+	http.HandleFunc("GET /grooved-reducing-coupling", requireLogin(partForm[GroovedReducingCoupling]))
+	http.HandleFunc("POST /grooved-reducing-coupling", requireLogin(partForm[GroovedReducingCoupling]))
+	http.HandleFunc("GET /grooved-flange-adapter", requireLogin(partForm[GroovedFlangeAdapter]))
+	http.HandleFunc("POST /grooved-flange-adapter", requireLogin(partForm[GroovedFlangeAdapter]))
 
 	http.HandleFunc("GET /{$}", requireLogin(index))
 	http.HandleFunc("POST /remove", requireLogin(removePart))
