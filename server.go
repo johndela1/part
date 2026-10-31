@@ -80,7 +80,7 @@ type Pipe struct {
 	CoatingType   string
 	EndType       string
 	Size          string
-	Quantity      int
+	Feet          int
 }
 
 func (Pipe) choices(field string) []string {
@@ -150,12 +150,12 @@ func mapForm[T part](r *http.Request, part *T) map[string]error {
 			}
 			value.Field(index).SetString(text)
 		case reflect.Int:
-			quantity, err := parseQuantity(text)
+			number, err := parsePositiveInt(text)
 			if err != nil {
 				errors[field.Name] = err
 				continue
 			}
-			value.Field(index).SetInt(int64(quantity))
+			value.Field(index).SetInt(int64(number))
 		}
 	}
 	return errors
@@ -163,25 +163,25 @@ func mapForm[T part](r *http.Request, part *T) map[string]error {
 
 func validateRequired(value string) error {
 	if value == "" {
-		return errors.New("This field is required")
+		return errors.New("required")
 	}
 	return nil
 }
 
-func parseQuantity(text string) (int, error) {
-	quantity, err := strconv.Atoi(text)
+func parsePositiveInt(text string) (int, error) {
+	number, err := strconv.Atoi(text)
 	if err != nil {
-		return 0, errors.New("Quantity must be a whole number within the supported range")
+		return 0, errors.New("value must be a whole number within the supported range")
 	}
-	if quantity < 1 {
-		return 0, errors.New("Value should be greater than or equal to 1")
+	if number < 1 {
+		return 0, errors.New("must be greater than 0")
 	}
-	return quantity, nil
+	return number, nil
 }
 
 func validateChoice(value string, choices []string) error {
 	if !slices.Contains(choices, value) {
-		return fmt.Errorf("Invalid value '%s' provided", value)
+		return fmt.Errorf("invalid value '%s' provided", value)
 	}
 	return nil
 }
@@ -262,7 +262,7 @@ var partTemplate = template.Must(template.New("part").Funcs(template.FuncMap{
 <form action="{{.Target}}" method="post">
 {{range .Fields}}
 <div>
-  <label for="{{.Name}}">{{label .Name}} <span aria-hidden="true">*</span></label>
+  <label for="{{.Name}}">{{label .Name}}</label>
   {{if .Choices}}
   <select id="{{.Name}}" name="{{.Name}}" required>
     {{$value := .Value}}{{range .Choices}}
@@ -289,7 +289,7 @@ func partForm[T part](w http.ResponseWriter, r *http.Request) {
 	var errors map[string]error
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			http.Error(w, "invalid form data", http.StatusBadRequest)
 			return
 		}
 		errors = mapForm(r, &part)
