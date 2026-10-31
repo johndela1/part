@@ -453,7 +453,6 @@ func sendOrder(o order) error {
 
 type order struct {
 	id, username, parts string
-	items               []part
 }
 
 func newOrder(items []part, username string) order {
@@ -462,7 +461,7 @@ func newOrder(items []part, username string) order {
 		parts += formatPart(item) + "\n"
 	}
 	return order{
-		id: rand.Text(), username: username, parts: parts, items: items,
+		id: rand.Text(), username: username, parts: parts,
 	}
 }
 
@@ -503,7 +502,7 @@ func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 		}
 		if err != nil {
 			cartsMu.Lock()
-			carts[id] = append(o.items, carts[id]...)
+			carts[id] = append(items, carts[id]...)
 			cartsMu.Unlock()
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
