@@ -447,22 +447,21 @@ func sendOrder(o order) error {
 		smtp.PlainAuth("", senderMail, senderPass, smtpServer),
 		senderMail,
 		to,
-		[]byte("subject: order alert\n\n"+o.parts+"\nrequester: "+o.username),
+		[]byte(fmt.Sprintf("subject: order alert\n\n%s\nrequester: %s", o, o.username)),
 	)
 }
 
 type order struct {
-	id, username, parts string
+	id, username string
+	items        []part
 }
 
-func newOrder(items []part, username string) order {
-	var parts string
-	for _, item := range items {
-		parts += formatPart(item) + "\n"
+func (o order) String() string {
+	var text string
+	for _, item := range o.items {
+		text += formatPart(item) + "\n"
 	}
-	return order{
-		id: rand.Text(), username: username, parts: parts,
-	}
+	return text
 }
 
 func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
@@ -480,13 +479,13 @@ func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 		sessionsMu.Lock()
 		username := sessions[id]
 		sessionsMu.Unlock()
-		o := newOrder(items, username)
+		o := order{id: rand.Text(), username: username, items: items}
 
 		if err := recordOrder(
 			"%s: submitted by %q: %q",
 			o.id,
 			o.username,
-			strings.TrimSuffix(o.parts, "\n"),
+			strings.TrimSuffix(o.String(), "\n"),
 		); err != nil {
 			log.Printf("ERROR %s: %q", o.id, err.Error())
 		}
@@ -502,7 +501,7 @@ func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 		}
 		if err != nil {
 			cartsMu.Lock()
-			carts[id] = append(items, carts[id]...)
+			carts[id] = append(o.items, carts[id]...)
 			cartsMu.Unlock()
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
