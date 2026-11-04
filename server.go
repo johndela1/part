@@ -50,30 +50,16 @@ func (Nipple) choices(string) []string {
 	return nippleSizes
 }
 
-var nippleSizes = []string{
-	"close",
-	"1″ × 2″",
-	"1″ × 2½″",
-	"1″ × 3″",
-	"1″ × 3½″",
-	"1″ × 4″",
-	"1″ × 4½″",
-	"1″ × 5″",
-	"1″ × 5½″",
-	"1″ × 6″",
-	"1″ × 6½″",
-	"1″ × 7″",
-	"1″ × 7½″",
-	"1″ × 8″",
-	"1″ × 8½″",
-	"1″ × 9″",
-	"1″ × 9½″",
-	"1″ × 10″",
-	"1″ × 10½″",
-	"1″ × 11″",
-	"1″ × 11½″",
-	"1″ × 12″",
-}
+var nippleSizes = func() []string {
+	sizes := []string{"close"}
+	for inches := 2; inches <= 12; inches++ {
+		sizes = append(sizes, fmt.Sprintf("1″ × %d″", inches))
+		if inches < 12 {
+			sizes = append(sizes, fmt.Sprintf("1″ × %d½″", inches))
+		}
+	}
+	return sizes
+}()
 
 type Pipe struct {
 	ThicknessType string
@@ -95,6 +81,30 @@ type MechanicalTee struct {
 func (MechanicalTee) choices(string) []string {
 	return mechanicalTeeSizes
 }
+
+type ScrewedTee struct {
+	RunSize    string
+	BullheadSize string
+	Quantity   int
+}
+
+func (ScrewedTee) choices(field string) []string {
+	return screwedTeeChoices[field]
+}
+
+var screwedTeeChoices = func() map[string][]string {
+	outlets := []string{"2½″", "2″", "1½″", "1¼″", "1″", "½″"}
+	var sizes []string
+	for _, first := range outlets {
+		for _, second := range outlets {
+			sizes = append(sizes, first+" × "+second)
+		}
+	}
+	return map[string][]string{
+		"RunSize":    sizes,
+		"BullheadSize": outlets,
+	}
+}()
 
 type PipeStand struct {
 	Size     string
@@ -288,7 +298,32 @@ type formField struct {
 	Error       error
 }
 
-var partTemplate = template.Must(template.New("part").Parse(`
+const pageStart = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pot part ordering tool</title>
+<style>
+html { font-size: 150%; }
+body { margin: 0; padding: 0.2rem; font-family: sans-serif; line-height: 1.4; overflow-wrap: anywhere; }
+*, *::before, *::after { box-sizing: border-box; }
+h1 { font-size: 1.25rem; margin: 0 0 0.4rem; }
+form { margin-bottom: 0.4rem; }
+form > div { margin-bottom: 0.3rem; }
+label { display: block; }
+input, select, button { font: inherit; max-width: 100%; min-width: 44px; min-height: 44px; padding: 0.1em; }
+input, select { display: block; width: 100%; }
+button { white-space: normal; overflow-wrap: anywhere; }
+a { display: inline-block; min-width: 44px; min-height: 44px; padding-block: 0.1em; }
+</style>
+</head>
+<body>
+`
+
+const pageEnd = `</body></html>`
+
+var partTemplate = template.Must(template.New("part").Parse(pageStart + `
 <h1>{{.PartName}}</h1>
 <form action="{{.Target}}" method="post">
 {{range .Fields}}
@@ -313,7 +348,7 @@ var partTemplate = template.Must(template.New("part").Parse(`
 document.querySelectorAll('select').forEach(select => select.selectedIndex = -1);
 </script>
 {{end}}
-`))
+` + pageEnd))
 
 func partForm[T part](w http.ResponseWriter, r *http.Request) {
 	var part T
@@ -404,11 +439,11 @@ func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 func login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
-	io.WriteString(w, `<form method="post" action="/login">
+	io.WriteString(w, pageStart+`<form method="post" action="/login">
 	<input name="username" placeholder="username" required autofocus><br>
         <input name="password" type="password" placeholder="password" required><br>
         <button type="submit">login</button>
-    </form>`)
+    </form>`+pageEnd)
 }
 
 func authenticate(users map[string]string) http.HandlerFunc {
@@ -439,18 +474,16 @@ func index(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	io.WriteString(w, `
-			<!DOCTYPE html>
-			<html>
-			<body>
+	io.WriteString(w, pageStart+`
 				<h1>
 				<a href="./nipple">nipple</a><br>
 				<a href="./pipe">pipe</a><br>
-				<a href="./mechanical-tee">mechanical tees</a><br>
-				<a href="./pipe-stand">pipe stands</a><br>
-				<a href="./grooved-coupling">grooved couplings</a><br>
-				<a href="./grooved-reducing-coupling">grooved reducing couplings</a><br>
-				<a href="./grooved-flange-adapter">grooved flange adapters</a><br>
+				<a href="./mechanical-tee">mechanical tee</a><br>
+				<a href="./screwed-tee">screwed tee</a><br>
+				<a href="./pipe-stand">pipe stand</a><br>
+				<a href="./grooved-coupling">grooved coupling</a><br>
+				<a href="./grooved-reducing-coupling">grooved reducing coupling</a><br>
+				<a href="./grooved-flange-adapter">grooved flange adapter</a><br>
 				</h1>
 		`)
 	for index, item := range items {
@@ -464,11 +497,9 @@ func index(w http.ResponseWriter, r *http.Request) {
 			<form action="/submit" method="post">
 			    <button type="submit">submit order</button>
 			</form>
-		</body>
-		</html>
-
 		`)
 	}
+	io.WriteString(w, pageEnd)
 }
 
 func removePart(w http.ResponseWriter, r *http.Request) {
@@ -557,20 +588,13 @@ func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 			return
 		}
 
-		io.WriteString(w, `
-			<!DOCTYPE html>
-			<html>
-			<head>
-			    <title>pot part ordering tool</title>
-			</head>
-			<body>
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		io.WriteString(w, pageStart+`
 			    <div>
 				<h1>sent</h1>
 				<a href="/">&larr; back</a>
 			    </div>
-			</body>
-			</html>
-			`)
+			`+pageEnd)
 	}
 }
 
@@ -630,6 +654,8 @@ func main() {
 	http.HandleFunc("POST /pipe", requireLogin(partForm[Pipe]))
 	http.HandleFunc("GET /mechanical-tee", requireLogin(partForm[MechanicalTee]))
 	http.HandleFunc("POST /mechanical-tee", requireLogin(partForm[MechanicalTee]))
+	http.HandleFunc("GET /screwed-tee", requireLogin(partForm[ScrewedTee]))
+	http.HandleFunc("POST /screwed-tee", requireLogin(partForm[ScrewedTee]))
 	http.HandleFunc("GET /pipe-stand", requireLogin(partForm[PipeStand]))
 	http.HandleFunc("POST /pipe-stand", requireLogin(partForm[PipeStand]))
 	http.HandleFunc("GET /grooved-coupling", requireLogin(partForm[GroovedCoupling]))
