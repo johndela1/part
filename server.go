@@ -187,9 +187,9 @@ func formatPart(p part) string {
 	return partType.Name() + ": " + strings.Join(fields, ", ")
 }
 
-func mapForm[T part](r *http.Request, part *T) map[string]error {
+func mapForm[T part](r *http.Request, p *T) map[string]error {
 	errs := make(map[string]error)
-	value := reflect.ValueOf(part).Elem()
+	value := reflect.ValueOf(p).Elem()
 	for index := range value.NumField() {
 		field := value.Type().Field(index)
 		text := r.Form.Get(field.Name)
@@ -199,7 +199,7 @@ func mapForm[T part](r *http.Request, part *T) map[string]error {
 		}
 		switch value.Field(index).Kind() {
 		case reflect.String:
-			if !slices.Contains((*part).choices(field.Name), text) {
+			if !slices.Contains((*p).choices(field.Name), text) {
 				errs[field.Name] = fmt.Errorf("invalid value '%s' provided", text)
 				continue
 			}
@@ -350,19 +350,19 @@ document.querySelectorAll('select').forEach(select => select.selectedIndex = -1)
 ` + pageEnd))
 
 func partForm[T part](w http.ResponseWriter, r *http.Request) {
-	var part T
-	var errors map[string]error
+	var p T
+	var errs map[string]error
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "invalid form data", http.StatusBadRequest)
 			return
 		}
-		errors = mapForm(r, &part)
-		if len(errors) == 0 {
-			log.Printf("post %s", formatPart(part))
+		errs = mapForm(r, &p)
+		if len(errs) == 0 {
+			log.Printf("post %s", formatPart(p))
 			id := sessionID(w, r)
 			cartsMu.Lock()
-			carts[id] = append(carts[id], part)
+			carts[id] = append(carts[id], p)
 			cartsMu.Unlock()
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
@@ -370,24 +370,24 @@ func partForm[T part](w http.ResponseWriter, r *http.Request) {
 	}
 
 	var fields []formField
-	value := reflect.ValueOf(part)
+	value := reflect.ValueOf(p)
 	for index := range value.NumField() {
 		field := value.Type().Field(index)
 		input := formField{
 			Name:  field.Name,
 			Value: fmt.Sprint(value.Field(index).Interface()),
-			Error: errors[field.Name],
+			Error: errs[field.Name],
 		}
 		if r.Method == http.MethodPost {
 			input.Value = r.Form.Get(field.Name)
 		}
 		if value.Field(index).Kind() == reflect.String {
-			input.Choices = part.choices(field.Name)
+			input.Choices = p.choices(field.Name)
 		}
 		fields = append(fields, input)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if len(errors) > 0 {
+	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
