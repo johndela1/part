@@ -82,9 +82,9 @@ func (MechanicalTee) choices(string) []string {
 }
 
 type ScrewedTee struct {
-	RunSize    string
+	RunSize      string
 	BullheadSize string
-	Quantity   int
+	Quantity     int
 }
 
 func (ScrewedTee) choices(field string) []string {
@@ -100,7 +100,7 @@ var screwedTeeChoices = func() map[string][]string {
 		}
 	}
 	return map[string][]string{
-		"RunSize":    sizes,
+		"RunSize":      sizes,
 		"BullheadSize": outlets,
 	}
 }()
