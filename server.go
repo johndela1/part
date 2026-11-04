@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
@@ -604,10 +603,7 @@ func sessionID(w http.ResponseWriter, r *http.Request) string {
 		return c.Value
 	}
 
-	b := make([]byte, 32)
-	rand.Read(b)
-
-	id := hex.EncodeToString(b)
+	id := rand.Text()
 	http.SetCookie(w, &http.Cookie{
 		Name: "sid", Value: id, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,

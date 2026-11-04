@@ -97,7 +97,7 @@ func TestSessionID(t *testing.T) {
 	w := httptest.NewRecorder()
 	id := sessionID(w, httptest.NewRequest(http.MethodGet, "/", nil))
 	cookies := w.Result().Cookies()
-	if len(id) != 64 || len(cookies) != 1 || cookies[0].Value != id {
+	if id == "" || len(cookies) != 1 || cookies[0].Value != id {
 		t.Fatalf("id=%q cookies=%v", id, cookies)
 	}
 	c := cookies[0]
