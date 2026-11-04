@@ -538,11 +538,12 @@ type order struct {
 }
 
 func (o order) String() string {
-	var text string
+	var text strings.Builder
 	for _, item := range o.items {
-		text += formatPart(item) + "\n"
+		text.WriteString(formatPart(item))
+		text.WriteByte('\n')
 	}
-	return text
+	return text.String()
 }
 
 func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
