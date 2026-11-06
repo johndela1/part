@@ -189,28 +189,26 @@ func formatPart(p part) string {
 
 func mapForm[T part](r *http.Request, p *T) map[string]error {
 	errs := make(map[string]error)
-	value := reflect.ValueOf(p).Elem()
-	for index := range value.NumField() {
-		field := value.Type().Field(index)
-		text := r.Form.Get(field.Name)
-		if text == "" {
+	for field, value := range reflect.ValueOf(p).Elem().Fields() {
+		input := r.Form.Get(field.Name)
+		if input == "" {
 			errs[field.Name] = errors.New("required")
 			continue
 		}
-		switch value.Field(index).Kind() {
+		switch value.Kind() {
 		case reflect.String:
-			if !slices.Contains((*p).choices(field.Name), text) {
-				errs[field.Name] = fmt.Errorf("invalid value '%s' provided", text)
+			if !slices.Contains((*p).choices(field.Name), input) {
+				errs[field.Name] = fmt.Errorf("invalid value %q provided", input)
 				continue
 			}
-			value.Field(index).SetString(text)
+			value.SetString(input)
 		case reflect.Int:
-			number, err := parsePositiveInt(text)
+			number, err := parsePositiveInt(input)
 			if err != nil {
 				errs[field.Name] = err
 				continue
 			}
-			value.Field(index).SetInt(int64(number))
+			value.SetInt(int64(number))
 		}
 	}
 	return errs
