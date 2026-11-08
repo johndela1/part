@@ -20,10 +20,11 @@ import (
 )
 
 var (
-	sessions   = make(map[string]string)
-	sessionsMu sync.Mutex
-	carts      = make(map[string][]part)
-	cartsMu    sync.Mutex
+	sessions         = make(map[string]string)
+	sessionsMu       sync.Mutex
+	carts            = make(map[string][]part)
+	projectLocations = make(map[string]ProjectLocation)
+	cartsMu          sync.Mutex
 
 	to = []string{"glennwarden@yahoo.com", "john@jjdev.com"}
 
@@ -1628,7 +1629,9 @@ button:active, .button:active { transform: translateY(1px); }
 .site-header { background: var(--paper); border-bottom: 1px solid var(--line); }
 .header-inner { max-width: 1340px; min-height: 92px; margin: auto; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
 .brand { display: inline-flex; align-items: center; gap: .7rem; text-decoration: none; min-height: 48px; }
-.brand-mark { width: 44px; height: 44px; display: grid; place-items: center; background: #111111; color: #ef4444; border-radius: 12px; font-size: 1.65rem; font-weight: 800; line-height: 1; }
+.brand-logo { display: block; width: 250px; max-width: 65vw; height: auto; }
+.brand { flex-direction: column; align-items: center; gap: .25rem; }
+.company-name { color: #00245a; font-size: 1rem; font-weight: 800; letter-spacing: .12em; text-align: center; }
 .brand-name { display: block; font-size: 1.15rem; font-weight: 800; letter-spacing: .08em; line-height: 1.2; }
 .brand-description { display: block; margin-top: .15rem; font-size: .64rem; font-weight: 550; color: var(--muted); letter-spacing: .09em; text-transform: uppercase; }
 .header-links { display: flex; align-items: center; gap: 1.5rem; font-size: .85rem; font-weight: 600; }
@@ -1643,20 +1646,25 @@ h1 { margin-bottom: .65rem; max-width: 24ch; font-size: clamp(1.8rem, 3.4vw, 2.7
 h2 { margin-bottom: .4rem; font-size: 1.15rem; font-weight: 700; letter-spacing: -.02em; }
 .intro { max-width: 58ch; margin-bottom: 0; color: var(--muted); font-size: .93rem; }
 .page-heading { margin-bottom: 1.9rem; }
-.catalog-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 2rem; align-items: start; }
+.catalog-layout { display: block; gap: 2rem; align-items: start; }
 .catalog-content { min-width: 0; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; margin-bottom: .85rem; }
 .section-heading h2 { margin: 0; font-size: .83rem; letter-spacing: 0; }
 .section-heading span { color: var(--muted); font-size: .72rem; }
-.category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; counter-reset: category; }
-.category-card { counter-increment: category; min-width: 0; }
-.category-card a { position: relative; height: 100%; min-height: 166px; display: flex; flex-direction: column; align-items: flex-start; padding: 1.15rem 1.2rem; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 2px 2px #213c3303; text-decoration: none; transition: border-color .15s, box-shadow .15s, transform .15s; }
-.category-card a::before { content: counter(category, decimal-leading-zero); display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: .95rem; border: 1px solid #dce4d8; border-radius: 9px; background: var(--soft); color: #466046; font-size: .68rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.category-card a::after { content: "↗"; position: absolute; right: 1.1rem; top: 1.1rem; color: #758776; font-size: 1.2rem; }
-.category-card a:hover { border-color: #8da38b; box-shadow: 0 5px 14px #213c3309; transform: translateY(-2px); }
-.category-card h3 { max-width: 26ch; margin-bottom: .35rem; font-size: .94rem; font-weight: 650; letter-spacing: -.02em; line-height: 1.35; }
-.category-count { color: var(--muted); font-size: .7rem; margin-top: auto; }
-.category-card:nth-child(4n + 2) a::before { color: #955b38; background: #f8ede1; border-color: #ecdfcb; }
+.catalog-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.catalog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; font-size: .85rem; }
+.catalog-toolbar h1 { margin: 0; font-size: 1.4rem; }
+.catalog-toolbar .button { min-height: 44px; padding: .45rem .85rem; font-size: .8rem; }
+.project-details { margin-bottom: 1.25rem; font-size: .85rem; }
+.project-details p { margin: .25rem 0; color: var(--muted); }
+.category-grid { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--paper); }
+.category-card { min-width: 0; }
+.category-card + .category-card { border-top: 1px solid var(--line); }
+.category-card a { display: flex; align-items: center; justify-content: space-between; gap: .8rem; min-height: 48px; padding: .55rem .9rem; text-decoration: none; transition: background .15s; }
+.category-card a:hover { background: #edf1e8; }
+.category-card h3 { margin: 0; font-size: .88rem; font-weight: 550; line-height: 1.4; }
+.category-count { color: var(--muted); font-size: .68rem; white-space: nowrap; }
+
 .breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1.5rem; color: var(--muted); font-size: .76rem; }
 .breadcrumbs a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
 .breadcrumbs a:hover { color: var(--ink); text-decoration: underline; }
@@ -1665,24 +1673,26 @@ h2 { margin-bottom: .4rem; font-size: 1.15rem; font-weight: 700; letter-spacing:
 .part-link a::first-letter { text-transform: uppercase; }
 .part-link a::after { content: "+"; position: absolute; right: 1.05rem; color: #6f846d; font-size: 1.2rem; font-weight: 400; }
 .part-link a:hover { background: #fafcf6; border-color: #8da38b; }
-.cart-panel { position: sticky; top: 1.5rem; border: 1px solid var(--line); border-radius: 15px; background: var(--paper); overflow: hidden; box-shadow: 0 4px 16px #213c3304; }
-.cart-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.1rem 1.2rem; border-bottom: 1px solid var(--line); }
-.cart-heading h2 { margin: 0; font-size: 1rem; }
+.cart-panel { max-width: 760px; margin: 0 auto; border: 1px solid var(--line); border-radius: 15px; background: var(--paper); overflow: hidden; box-shadow: 0 4px 16px #213c3304; }
+.cart-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem .85rem; border-bottom: 1px solid var(--line); }
+.cart-heading h2 { margin: 0; font-size: .88rem; }
 .badge { min-width: 28px; padding: .15rem .45rem; border-radius: 6px; background: var(--soft); color: var(--ink); text-align: center; font-size: .7rem; font-weight: 700; }
-.cart-empty { padding: 2rem 1.4rem 2.3rem; text-align: center; }
+.cart-empty { padding: 1rem .85rem 1.2rem; text-align: center; }
 .empty-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 1rem; background: var(--soft); border-radius: 50%; color: #6e8566; }
 .empty-icon svg { width: 26px; height: 26px; }
 .cart-empty h3 { margin-bottom: .4rem; font-size: .88rem; font-weight: 650; }
 .cart-empty p { max-width: 24ch; margin: auto; color: var(--muted); font-size: .78rem; }
-.cart-items { max-height: min(58vh, 680px); overflow-y: auto; list-style: none; padding: 0 1.2rem; margin: 0; overscroll-behavior: contain; }
-.cart-item { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.cart-items { list-style: none; padding: 0 .85rem; margin: 0; overscroll-behavior: contain; }
+.cart-item { padding: .65rem 0; border-bottom: 1px solid var(--line); }
 .cart-item:last-child { border-bottom: 0; }
 .cart-item h3 { margin-bottom: .35rem; font-size: .86rem; font-weight: 650; }
 .cart-description { margin-bottom: .5rem; font-size: .75rem; color: var(--muted); line-height: 1.7; }
 .remove-button { min-height: 44px; padding: .25rem .55rem; margin-left: -.55rem; background: transparent; border-color: transparent; color: #93452e; font-size: .73rem; font-weight: 600; }
 .remove-button:hover { background: #f9eee7; }
-.cart-footer { padding: 1.05rem 1.2rem 1.15rem; border-top: 1px solid var(--line); background: #fafbf5; }
-.cart-footer button { width: 100%; }
+.cart-footer { padding: .75rem .85rem; border-top: 1px solid var(--line); background: #fafbf5; }
+.cart-footer button { width: 100%; min-height: 44px; padding: .5rem .7rem; font-size: .8rem; }
+.cart-empty .empty-icon { width: 40px; height: 40px; margin-bottom: .6rem; }
+.cart-empty .empty-icon svg { width: 22px; height: 22px; }
 .cart-footer p { margin: .65rem 0 0; font-size: .67rem; color: var(--muted); text-align: center; }
 .form-shell { max-width: 880px; margin: 0 auto; }
 .form-panel { padding: 1.7rem; background: var(--paper); border: 1px solid var(--line); border-radius: 15px; box-shadow: 0 4px 16px #213c3304; }
@@ -1715,11 +1725,9 @@ select { appearance: none; padding-right: 2.2rem; background-image: url("data:im
 .footer-brand { color: var(--ink); font-weight: 750; letter-spacing: .08em; }
 .skip-link { position: absolute; z-index: 10; left: 1rem; top: -100px; padding: .7rem 1rem; background: var(--ink); color: white; border-radius: 8px; }
 .skip-link:focus { top: .8rem; }
-@media (min-width: 1250px) { .category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 1000px) { .catalog-layout { grid-template-columns: minmax(0, 1fr) 300px; gap: 1.2rem; } .header-inner, .app-shell, .site-footer { padding-left: 1.3rem; padding-right: 1.3rem; } }
+@media (max-width: 1000px) { .catalog-layout { grid-template-columns: 1fr; gap: 1.2rem; } .header-inner, .app-shell, .site-footer { padding-left: 1.3rem; padding-right: 1.3rem; } }
 @media (max-width: 760px) { .catalog-layout { grid-template-columns: 1fr; gap: 1.5rem; } .cart-panel { position: static; } .cart-items { max-height: none; } .app-shell { padding-top: 1.7rem; } .header-inner { min-height: 80px; } .page-heading { margin-bottom: 1.5rem; } .header-links { gap: 1rem; } .auth-shell { margin-top: 1rem; } }
-@media (max-width: 480px) { html { font-size: 17px; } .header-inner, .app-shell, .site-footer { padding-left: 1rem; padding-right: 1rem; } .brand-description { font-size: .58rem; } .header-links .catalog-nav { display: none; } .header-links .cart-link { padding: .4rem .6rem; } .category-grid { gap: .65rem; } .category-card a { min-height: 170px; padding: 1rem .85rem; } .category-card h3 { font-size: .88rem; } .category-card a::after { right: .7rem; top: .8rem; } .field-grid { grid-template-columns: 1fr; gap: 1.15rem; } .form-panel, .auth-panel { padding: 1.2rem; } .form-actions button { width: 100%; } .form-actions a { width: 100%; justify-content: center; order: 1; } .breadcrumbs { gap: .45rem; margin-bottom: .8rem; } .status-panel { padding: 2rem 1.2rem; } }
-@media (max-width: 340px) { .category-grid { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { html { font-size: 17px; } .header-inner, .app-shell, .site-footer { padding-left: 1rem; padding-right: 1rem; } .brand-description { font-size: .58rem; } .header-links .catalog-nav { display: none; } .header-links .cart-link { padding: .4rem .6rem; } .category-card a { gap: .65rem; min-height: 48px; padding: .55rem .8rem; } .category-card h3 { font-size: .86rem; } .field-grid { grid-template-columns: 1fr; gap: 1.15rem; } .form-panel, .auth-panel { padding: 1.2rem; } .form-actions button { width: 100%; } .form-actions a { width: 100%; justify-content: center; order: 1; } .breadcrumbs { gap: .45rem; margin-bottom: .8rem; } .status-panel { padding: 2rem 1.2rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
 </style>
 </head>
@@ -1728,8 +1736,8 @@ select { appearance: none; padding-right: 2.2rem; background-image: url("data:im
 <header class="site-header">
   <div class="header-inner">
     <a class="brand" href="/" aria-label="POT home">
-      <span class="brand-mark" aria-hidden="true">P</span>
-      <span><span class="brand-name">POT</span><span class="brand-description">Parts Ordering Tool</span></span>
+      <span class="company-name">SERENITY FIRE</span>
+      <img class="brand-logo" src="/pot-logo.png?v=us-flag" alt="POT — Parts Ordering Tool" width="2048" height="683">
     </a>
   </div>
 </header>
@@ -1737,17 +1745,23 @@ select { appearance: none; padding-right: 2.2rem; background-image: url("data:im
 `
 
 const pageEnd = `</main>
-<footer class="site-footer"><span class="footer-brand">POT</span><span>Parts. Equipment. Ready for the job.</span></footer>
+<footer class="site-footer"><span class="footer-brand">POT</span><span>Designed by Glenn Warden</span></footer>
 </body></html>`
 
 var indexTemplate = template.Must(template.New("index").Funcs(template.FuncMap{
 	"partName":    func(p part) string { return readableName(reflect.TypeOf(p).Name()) },
 	"partDetails": func(p part) string { return formatPartFields(p, true) },
 }).Parse(pageStart + `
+{{if not .CartPage}}
+<div class="catalog-toolbar"><h1>Parts catalog</h1><nav class="catalog-actions" aria-label="Order actions"><a href="/projects/location">Project location</a><a class="button" href="/cart">Cart ({{len .Items}})</a></nav></div>
+{{end}}
+{{if .CartPage}}<nav class="breadcrumbs"><a href="/">← Continue ordering</a>{{if .Review}}<a href="/cart">Edit cart</a>{{end}}</nav><div class="page-heading"><h1>{{if .Review}}Review order{{else}}Your cart{{end}}</h1><p class="intro">{{if .Review}}Check your parts and project details, then submit your order.{{else}}Check your parts before continuing to review.{{end}}</p></div>{{end}}
 {{if .Selected}}
-<nav class="breadcrumbs" aria-label="Navigation"><a href="/">← All categories</a><span aria-hidden="true">/</span><a href="#cart">Order cart</a></nav>
+<nav class="breadcrumbs" aria-label="Navigation"><a href="/">← All categories</a><span aria-hidden="true">/</span><a href="/cart">Order cart</a></nav>
 <div class="page-heading"><p class="eyebrow">Parts &amp; equipment</p><h1>{{.Selected.Name}}</h1><p class="intro">{{if eq .Selected.ID "project-locations"}}Add the job site and delivery instructions to your order.{{else}}Choose an item, select your specifications, and add it to your order.{{end}}</p></div>
 {{end}}
+{{if .HasLocation}}<div class="project-details"><strong>Project: {{.Location.Name}}</strong><p>{{.Location.Address}}{{if .Location.Notes}} · {{.Location.Notes}}{{end}}</p><a href="/projects/location">Edit project location</a></div>{{end}}
+{{if not .CartPage}}
 <div class="catalog-layout">
 <section class="catalog-content" aria-label="Catalog">
 {{if .Selected}}
@@ -1757,26 +1771,28 @@ var indexTemplate = template.Must(template.New("index").Funcs(template.FuncMap{
 </nav>
 {{else}}
 <nav class="category-grid" aria-label="Categories">
-{{range .Categories}}<div class="category-card"><a aria-label="{{.Name}}" href="/?category={{.ID}}"><h3>{{.Name}}</h3><span class="category-count">{{len .Parts}} {{if eq (len .Parts) 1}}item{{else}}items{{end}}</span></a></div>{{end}}
+{{range .Categories}}{{if ne .ID "project-locations"}}<div class="category-card"><a aria-label="{{.Name}}" href="/?category={{.ID}}"><h3>{{.Name}}</h3><span class="category-count">{{len .Parts}} {{if eq (len .Parts) 1}}item{{else}}items{{end}}</span></a></div>{{end}}{{end}}
 </nav>
 {{end}}
 </section>
+</div>
+{{else}}
 <section id="cart" class="cart-panel" aria-labelledby="cart-title">
 <div class="cart-heading"><h2 id="cart-title">Order cart</h2><span class="badge" aria-label="{{len .Items}} items in cart">{{len .Items}}</span></div>
 {{if .Items}}<ul class="cart-items">
 {{range $index, $item := .Items}}
 <li class="cart-item"><h3>{{partName $item}}</h3><p class="cart-description">{{partDetails $item}}</p>
-<form action="/remove" method="post"><button class="remove-button" type="submit" name="index" value="{{$index}}" aria-label="Remove {{partName $item}} from cart">Remove</button></form></li>
+{{if not $.Review}}<form action="/remove" method="post"><input type="hidden" name="return" value="cart"><button class="remove-button" type="submit" name="index" value="{{$index}}" aria-label="Remove {{partName $item}} from cart">Remove</button></form>{{end}}</li>
 {{end}}
-</ul><div class="cart-footer"><form action="/submit" method="post"><button type="submit">Submit order <span aria-hidden="true">→</span></button></form><p>Review your items before submitting.</p></div>
+</ul><div class="cart-footer">{{if .Review}}<form action="/submit" method="post"><button type="submit">Submit order <span aria-hidden="true">→</span></button></form>{{else}}<a class="button" href="/review">Review order →</a>{{end}}</div>
 {{else}}<div class="cart-empty"><div class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 9-4 9 4v11l-9 4-9-4V7Z"/><path d="m3 7 9 4 9-4M12 11v11M7.5 5l9 4"/></svg></div><h3>Your cart is empty.</h3><p>Add items from the catalog and they’ll appear here.</p></div>{{end}}
 </section>
-</div>
+{{end}}
 ` + pageEnd))
 
 var partTemplate = template.Must(template.New("part").Parse(pageStart + `
 <div class="form-shell">
-<nav class="breadcrumbs" aria-label="Navigation"><a href="/">← All categories</a><span aria-hidden="true">/</span><a href="/#cart">Order cart</a></nav>
+<nav class="breadcrumbs" aria-label="Navigation"><a href="/">← All categories</a><span aria-hidden="true">/</span><a href="/cart">Order cart</a></nav>
 <div class="page-heading"><p class="eyebrow">Add to your order</p><h1>{{.PartName}}</h1><p class="intro">{{if eq .PartName "Project Location"}}Enter the project name, address, and any delivery instructions.{{else}}Set your specifications and quantity below.{{end}}</p></div>
 <form class="form-panel" action="{{.Target}}" method="post">
 <div class="form-section-heading"><h2>{{if eq .PartName "Project Location"}}Location details{{else}}Item details{{end}}</h2><p>All fields are required unless marked optional.</p></div>
@@ -1800,13 +1816,21 @@ var partTemplate = template.Must(template.New("part").Parse(pageStart + `
 </div>
 {{end}}
 </div>
-<div class="form-actions"><a href="/">Cancel</a><button type="submit">Add to cart <span aria-hidden="true">+</span></button></div>
+<div class="form-actions"><a href="/">Cancel</a><button type="submit">{{if eq .PartName "Project Location"}}Save project location{{else}}Add to cart <span aria-hidden="true">+</span>{{end}}</button></div>
 </form>
 </div>
 ` + pageEnd))
 
 func partForm[T part](w http.ResponseWriter, r *http.Request) {
 	var p T
+	if r.Method == http.MethodGet {
+		if _, ok := any(p).(ProjectLocation); ok {
+			id := sessionID(w, r)
+			cartsMu.Lock()
+			p = any(projectLocations[id]).(T)
+			cartsMu.Unlock()
+		}
+	}
 	var errs map[string]error
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
@@ -1818,7 +1842,11 @@ func partForm[T part](w http.ResponseWriter, r *http.Request) {
 			log.Printf("post %s", formatPart(p))
 			id := sessionID(w, r)
 			cartsMu.Lock()
-			carts[id] = append(carts[id], p)
+			if location, ok := any(p).(ProjectLocation); ok {
+				projectLocations[id] = location
+			} else {
+				carts[id] = append(carts[id], p)
+			}
 			cartsMu.Unlock()
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
@@ -1956,15 +1984,20 @@ func index(w http.ResponseWriter, r *http.Request) {
 
 	cartsMu.Lock()
 	items := slices.Clone(carts[id])
+	location, hasLocation := projectLocations[id]
 	cartsMu.Unlock()
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	if err := indexTemplate.Execute(w, struct {
-		Categories []partCategory
-		Selected   *partCategory
-		Items      []part
-	}{partCategories, selected, items}); err != nil {
+		Categories  []partCategory
+		Selected    *partCategory
+		Items       []part
+		Location    ProjectLocation
+		HasLocation bool
+		CartPage    bool
+		Review      bool
+	}{partCategories, selected, items, location, hasLocation, r.URL.Path == "/cart" || r.URL.Path == "/review", r.URL.Path == "/review"}); err != nil {
 		log.Println(err)
 	}
 }
@@ -1986,7 +2019,11 @@ func removePart(w http.ResponseWriter, r *http.Request) {
 	}
 	carts[id] = slices.Delete(cart, index, index+1)
 	cartsMu.Unlock()
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	target := "/"
+	if r.FormValue("return") == "cart" {
+		target = "/cart"
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func sendOrder(o order) error {
@@ -2002,10 +2039,15 @@ func sendOrder(o order) error {
 type order struct {
 	id, username string
 	items        []part
+	location     *ProjectLocation
 }
 
 func (o order) String() string {
 	var text strings.Builder
+	if o.location != nil {
+		text.WriteString(formatPart(*o.location))
+		text.WriteByte('\n')
+	}
 	for _, item := range o.items {
 		text.WriteString(formatPart(item))
 		text.WriteByte('\n')
@@ -2018,6 +2060,7 @@ func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 		id := sessionID(w, r)
 		cartsMu.Lock()
 		items := carts[id]
+		location, hasLocation := projectLocations[id]
 		delete(carts, id)
 		cartsMu.Unlock()
 		if len(items) == 0 {
@@ -2029,6 +2072,9 @@ func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 		username := sessions[id]
 		sessionsMu.Unlock()
 		o := order{id: rand.Text(), username: username, items: items}
+		if hasLocation {
+			o.location = &location
+		}
 
 		if err := recordOrder(
 			"%s: submitted by %q: %q",
@@ -2121,11 +2167,16 @@ func main() {
 		log.Fatal(err)
 	}
 	http.HandleFunc("GET /login", login)
+	http.HandleFunc("GET /pot-logo.png", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "pot-logo.png")
+	})
 
 	http.HandleFunc("POST /login", authenticate(users))
 	registerPartForms(http.DefaultServeMux)
 
 	http.HandleFunc("GET /{$}", requireLogin(index))
+	http.HandleFunc("GET /cart", requireLogin(index))
+	http.HandleFunc("GET /review", requireLogin(index))
 	http.HandleFunc("POST /remove", requireLogin(removePart))
 	http.HandleFunc("POST /submit", requireLogin(submit(recordOrder)))
 	go func() {

@@ -10,10 +10,38 @@ import (
 	"testing"
 )
 
+func TestProjectLocationStaysOutsideCart(t *testing.T) {
+	resetTestState(t)
+	const id = "project-details"
+	t.Cleanup(func() { delete(projectLocations, id) })
+	w := httptest.NewRecorder()
+	partForm[ProjectLocation](w, formRequest("/projects/location", url.Values{
+		"Name": {"Warehouse"}, "Address": {"123 Main Street"}, "Notes": {"Loading dock"},
+	}, id))
+	if w.Code != http.StatusSeeOther || len(carts[id]) != 0 {
+		t.Fatalf("location added to cart or save failed: status=%d cart=%v", w.Code, carts[id])
+	}
+	location := projectLocations[id]
+	if location.Name != "Warehouse" || location.Address != "123 Main Street" {
+		t.Fatalf("project details not saved: %+v", location)
+	}
+	text := (order{items: []part{Nipple{Size: "close", Quantity: 2}}, location: &location}).String()
+	if !strings.Contains(text, "Warehouse") || !strings.Contains(text, "Nipple:") {
+		t.Fatalf("order missing location or parts: %s", text)
+	}
+	r := httptest.NewRequest(http.MethodGet, "/cart", nil)
+	r.AddCookie(&http.Cookie{Name: "sid", Value: id})
+	w = httptest.NewRecorder()
+	index(w, r)
+	if !strings.Contains(w.Body.String(), "Project: Warehouse") || !strings.Contains(w.Body.String(), "Your cart is empty.") {
+		t.Fatal("project details should display separately from the empty cart")
+	}
+}
+
 func TestCartDisplay(t *testing.T) {
 	resetTestState(t)
 	carts["display"] = []part{Nipple{Size: "<script>bad()</script>", Quantity: 3}}
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/cart", nil)
 	r.AddCookie(&http.Cookie{Name: "sid", Value: "display"})
 	w := httptest.NewRecorder()
 	index(w, r)
@@ -24,9 +52,22 @@ func TestCartDisplay(t *testing.T) {
 	if !strings.Contains(body, "Quantity: 3") || !strings.Contains(body, `name="index" value="0"`) {
 		t.Fatal("cart contents or delete button missing")
 	}
-	if !strings.Contains(body, `action="/submit"`) {
-		t.Fatal("nonempty cart has no submission button")
+	if !strings.Contains(body, `href="/review"`) || strings.Contains(body, `action="/submit"`) {
+		t.Fatal("cart should link to review before submission")
 	}
+	r.URL.Path = "/review"
+	w = httptest.NewRecorder()
+	index(w, r)
+	if !strings.Contains(w.Body.String(), `action="/submit"`) || strings.Contains(w.Body.String(), `action="/remove"`) {
+		t.Fatal("review must allow submission and link back for cart edits")
+	}
+	r.URL.Path = "/"
+	w = httptest.NewRecorder()
+	index(w, r)
+	if !strings.Contains(w.Body.String(), "Cart (1)") || strings.Contains(w.Body.String(), `id="cart"`) {
+		t.Fatal("catalog should show cart button without sidebar")
+	}
+	r.URL.Path = "/cart"
 	delete(carts, "display")
 	w = httptest.NewRecorder()
 	index(w, r)
