@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 var (
@@ -177,6 +178,10 @@ var groovedFlangeAdapterSizes = []string{
 }
 
 func formatPart(p part) string {
+	return reflect.TypeOf(p).Name() + ": " + formatPartFields(p, false)
+}
+
+func formatPartFields(p part, labels bool) string {
 	value := reflect.ValueOf(p)
 	partType := value.Type()
 	var fields []string
@@ -185,9 +190,16 @@ func formatPart(p part) string {
 		if field.Tag.Get("optional") == "true" && value.Field(index).IsZero() {
 			continue
 		}
-		fields = append(fields, fmt.Sprintf("%s: %v", field.Name, value.Field(index).Interface()))
+		name := field.Name
+		if labels {
+			name = field.Tag.Get("label")
+			if name == "" {
+				name = readableName(field.Name)
+			}
+		}
+		fields = append(fields, fmt.Sprintf("%s: %v", name, value.Field(index).Interface()))
 	}
-	return partType.Name() + ": " + strings.Join(fields, ", ")
+	return strings.Join(fields, ", ")
 }
 
 func mapForm[T part](r *http.Request, p *T) map[string]error {
@@ -328,11 +340,17 @@ func (GroovedElbow) choices(field string) []string {
 }
 
 type GroovedTee struct {
-	Size     string
-	Quantity int
+	Size         string `label:"Run size"`
+	BullheadSize string `label:"Bullhead size"`
+	Quantity     int
 }
 
-func (GroovedTee) choices(string) []string { return pipeChoices["Size"] }
+func (GroovedTee) choices(field string) []string {
+	if field == "Size" || field == "BullheadSize" {
+		return pipeChoices["Size"]
+	}
+	return nil
+}
 
 type GroovedCross struct {
 	Size     string
@@ -487,12 +505,12 @@ type CPVCCement struct {
 
 func (CPVCCement) choices(string) []string { return glueSizes }
 
-type OnePartGlue struct {
+type CPVCGlue struct {
 	Size     string
 	Quantity int
 }
 
-func (OnePartGlue) choices(string) []string { return glueSizes }
+func (CPVCGlue) choices(string) []string { return glueSizes }
 
 type SeamlessSteelPipe struct {
 	Size     string
@@ -840,6 +858,21 @@ type LoopHanger struct {
 }
 
 func (LoopHanger) choices(string) []string { return pipeChoices["Size"] }
+
+type CPVCHangerStrap struct {
+	Type     string `label:"Hanger / strap type"`
+	Size     string
+	Model    string `input:"text" optional:"true"`
+	Quantity int
+}
+
+// CPVC straps: https://www.phd-mfg.com/wp-content/uploads/2025/06/DigitalHangerCatalog_6-26-25.pdf
+func (CPVCHangerStrap) choices(field string) []string {
+	return map[string][]string{
+		"Type": {"one-hole wrap-around strap", "two-hole pipe strap", "two-hole side-mount strap", "two-hole stand-off strap"},
+		"Size": {"¾″", "1″", "1¼″", "1½″", "2″"},
+	}[field]
+}
 
 type SurgeRestraint struct {
 	Size     string
@@ -1375,6 +1408,14 @@ type FinalInspectionRequest struct {
 
 func (FinalInspectionRequest) choices(string) []string { return nil }
 
+type ProjectLocation struct {
+	Name    string `input:"text" label:"Project name"`
+	Address string `input:"text" label:"Project address"`
+	Notes   string `input:"text" optional:"true" label:"Delivery notes"`
+}
+
+func (ProjectLocation) choices(string) []string { return nil }
+
 type partLink struct {
 	Name, URL string
 	Form      http.HandlerFunc
@@ -1408,7 +1449,7 @@ var partCategories = []partCategory{
 		{"CPVC tee", "/parts/cpvc-tee", partForm[CPVCTee]},
 		{"CPVC elbow", "/parts/cpvc-elbow", partForm[CPVCElbow]},
 		{"CPVC solvent cement", "/parts/cpvc-cement", partForm[CPVCCement]},
-		{"one part glue", "/parts/one-part-glue", partForm[OnePartGlue]},
+		{"CPVC glue", "/parts/one-part-glue", partForm[CPVCGlue]},
 		{"seamless steel pipe", "/parts/seamless-steel-pipe", partForm[SeamlessSteelPipe]},
 		{"copper tubing", "/parts/copper-tubing", partForm[CopperTubing]},
 		{"copper fitting", "/parts/copper-fitting", partForm[CopperFitting]},
@@ -1448,6 +1489,7 @@ var partCategories = []partCategory{
 		{"band hanger", "/parts/band-hanger", partForm[BandHanger]},
 		{"clevis hanger", "/parts/clevis-hanger", partForm[ClevisHanger]},
 		{"loop hanger", "/parts/loop-hanger", partForm[LoopHanger]},
+		{"CPVC hangers & straps", "/parts/cpvc-hanger-strap", partForm[CPVCHangerStrap]},
 		{"surge restraint", "/parts/surge-restraint", partForm[SurgeRestraint]},
 		{"beam clamp", "/parts/beam-clamp", partForm[BeamClamp]},
 		{"concrete insert", "/parts/concrete-insert", partForm[ConcreteInsert]},
@@ -1521,6 +1563,9 @@ var partCategories = []partCategory{
 		{"rough inspection request", "/inspections/rough", partForm[RoughInspectionRequest]},
 		{"final inspection request", "/inspections/final", partForm[FinalInspectionRequest]},
 	}},
+	{"project-locations", "Project Locations", []partLink{
+		{"add project location", "/projects/location", partForm[ProjectLocation]},
+	}},
 }
 
 func findCategory(id string) *partCategory {
@@ -1545,7 +1590,20 @@ type partFormData struct {
 	PartName string
 	Target   string
 	Fields   []formField
-	Initial  bool
+}
+
+func readableName(name string) string {
+	runes := []rune(name)
+	var out strings.Builder
+	for i, r := range runes {
+		if i > 0 && unicode.IsUpper(r) &&
+			(unicode.IsLower(runes[i-1]) ||
+				(unicode.IsUpper(runes[i-1]) && i+1 < len(runes) && unicode.IsLower(runes[i+1]))) {
+			out.WriteByte(' ')
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
 }
 
 const pageStart = `<!DOCTYPE html>
@@ -1553,83 +1611,198 @@ const pageStart = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pot part ordering tool</title>
+<meta name="theme-color" content="#203f35">
+<title>POT · Part ordering tool</title>
 <style>
-html { font-size: 150%; }
-body { margin: 0; padding: 0.2rem; font-family: sans-serif; line-height: 1.4; overflow-wrap: anywhere; }
+:root { color-scheme: light; --ink: #213c33; --text: #253b33; --muted: #63716a; --paper: #fffefa; --line: #dce2d8; --accent: #ad4b27; --soft: #edf1e9; }
 *, *::before, *::after { box-sizing: border-box; }
-h1 { font-size: 1.25rem; margin: 0 0 0.4rem; }
-h2 { font-size: 1.1rem; }
-section { margin-bottom: 1rem; }
-form { margin-bottom: 0.4rem; }
-form > div { margin-bottom: 0.3rem; }
-label { display: block; }
-input, select, button { font: inherit; max-width: 100%; min-width: 44px; min-height: 44px; padding: 0.1em; }
-input, select { display: block; width: 100%; }
-button { white-space: normal; overflow-wrap: anywhere; }
-a { display: inline-block; min-width: 44px; min-height: 44px; padding-block: 0.1em; }
+html { font-size: 18px; scroll-padding-top: 1.5rem; }
+body { margin: 0; background: #f4f4ed; color: var(--text); font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; overflow-wrap: anywhere; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+button, input, select { font: inherit; }
+button, a, input, select { -webkit-tap-highlight-color: transparent; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+button, .button { display: inline-flex; align-items: center; justify-content: center; gap: .6rem; min-height: 50px; padding: .7rem 1.25rem; border: 1px solid var(--ink); border-radius: 10px; background: var(--ink); color: white; font-weight: 650; cursor: pointer; text-decoration: none; text-align: center; transition: background .15s, transform .15s; }
+button:hover, .button:hover { background: #315747; }
+button:active, .button:active { transform: translateY(1px); }
+.site-header { background: var(--paper); border-bottom: 1px solid var(--line); }
+.header-inner { max-width: 1340px; min-height: 92px; margin: auto; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
+.brand { display: inline-flex; align-items: center; gap: .7rem; text-decoration: none; min-height: 48px; }
+.brand-mark { width: 44px; height: 44px; display: grid; place-items: center; background: #111111; color: #ef4444; border-radius: 12px; font-size: 1.65rem; font-weight: 800; line-height: 1; }
+.brand-name { display: block; font-size: 1.15rem; font-weight: 800; letter-spacing: .08em; line-height: 1.2; }
+.brand-description { display: block; margin-top: .15rem; font-size: .64rem; font-weight: 550; color: var(--muted); letter-spacing: .09em; text-transform: uppercase; }
+.header-links { display: flex; align-items: center; gap: 1.5rem; font-size: .85rem; font-weight: 600; }
+.header-links a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
+.header-links a:hover { color: var(--accent); }
+.header-links .cart-link { border: 1px solid var(--line); border-radius: 9px; padding: .45rem .8rem; gap: .6rem; }
+.header-links svg { width: 19px; height: 19px; }
+.app-shell { max-width: 1340px; min-height: calc(100vh - 180px); margin: auto; padding: 2.6rem 2rem 3rem; }
+.eyebrow { margin: 0 0 .6rem; color: var(--accent); font-size: .67rem; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { margin-bottom: .65rem; max-width: 24ch; font-size: clamp(1.8rem, 3.4vw, 2.7rem); font-weight: 700; letter-spacing: -.045em; line-height: 1.12; color: var(--ink); }
+h2 { margin-bottom: .4rem; font-size: 1.15rem; font-weight: 700; letter-spacing: -.02em; }
+.intro { max-width: 58ch; margin-bottom: 0; color: var(--muted); font-size: .93rem; }
+.page-heading { margin-bottom: 1.9rem; }
+.catalog-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 2rem; align-items: start; }
+.catalog-content { min-width: 0; }
+.section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; margin-bottom: .85rem; }
+.section-heading h2 { margin: 0; font-size: .83rem; letter-spacing: 0; }
+.section-heading span { color: var(--muted); font-size: .72rem; }
+.category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; counter-reset: category; }
+.category-card { counter-increment: category; min-width: 0; }
+.category-card a { position: relative; height: 100%; min-height: 166px; display: flex; flex-direction: column; align-items: flex-start; padding: 1.15rem 1.2rem; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 2px 2px #213c3303; text-decoration: none; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.category-card a::before { content: counter(category, decimal-leading-zero); display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: .95rem; border: 1px solid #dce4d8; border-radius: 9px; background: var(--soft); color: #466046; font-size: .68rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.category-card a::after { content: "↗"; position: absolute; right: 1.1rem; top: 1.1rem; color: #758776; font-size: 1.2rem; }
+.category-card a:hover { border-color: #8da38b; box-shadow: 0 5px 14px #213c3309; transform: translateY(-2px); }
+.category-card h3 { max-width: 26ch; margin-bottom: .35rem; font-size: .94rem; font-weight: 650; letter-spacing: -.02em; line-height: 1.35; }
+.category-count { color: var(--muted); font-size: .7rem; margin-top: auto; }
+.category-card:nth-child(4n + 2) a::before { color: #955b38; background: #f8ede1; border-color: #ecdfcb; }
+.breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1.5rem; color: var(--muted); font-size: .76rem; }
+.breadcrumbs a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
+.breadcrumbs a:hover { color: var(--ink); text-decoration: underline; }
+.part-list { display: grid; gap: .55rem; }
+.part-link a { position: relative; display: flex; align-items: center; min-height: 65px; padding: .85rem 2.7rem .85rem 1.15rem; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: .92rem; font-weight: 550; text-decoration: none; transition: border-color .15s, background .15s; }
+.part-link a::first-letter { text-transform: uppercase; }
+.part-link a::after { content: "+"; position: absolute; right: 1.05rem; color: #6f846d; font-size: 1.2rem; font-weight: 400; }
+.part-link a:hover { background: #fafcf6; border-color: #8da38b; }
+.cart-panel { position: sticky; top: 1.5rem; border: 1px solid var(--line); border-radius: 15px; background: var(--paper); overflow: hidden; box-shadow: 0 4px 16px #213c3304; }
+.cart-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.1rem 1.2rem; border-bottom: 1px solid var(--line); }
+.cart-heading h2 { margin: 0; font-size: 1rem; }
+.badge { min-width: 28px; padding: .15rem .45rem; border-radius: 6px; background: var(--soft); color: var(--ink); text-align: center; font-size: .7rem; font-weight: 700; }
+.cart-empty { padding: 2rem 1.4rem 2.3rem; text-align: center; }
+.empty-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 1rem; background: var(--soft); border-radius: 50%; color: #6e8566; }
+.empty-icon svg { width: 26px; height: 26px; }
+.cart-empty h3 { margin-bottom: .4rem; font-size: .88rem; font-weight: 650; }
+.cart-empty p { max-width: 24ch; margin: auto; color: var(--muted); font-size: .78rem; }
+.cart-items { max-height: min(58vh, 680px); overflow-y: auto; list-style: none; padding: 0 1.2rem; margin: 0; overscroll-behavior: contain; }
+.cart-item { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.cart-item:last-child { border-bottom: 0; }
+.cart-item h3 { margin-bottom: .35rem; font-size: .86rem; font-weight: 650; }
+.cart-description { margin-bottom: .5rem; font-size: .75rem; color: var(--muted); line-height: 1.7; }
+.remove-button { min-height: 44px; padding: .25rem .55rem; margin-left: -.55rem; background: transparent; border-color: transparent; color: #93452e; font-size: .73rem; font-weight: 600; }
+.remove-button:hover { background: #f9eee7; }
+.cart-footer { padding: 1.05rem 1.2rem 1.15rem; border-top: 1px solid var(--line); background: #fafbf5; }
+.cart-footer button { width: 100%; }
+.cart-footer p { margin: .65rem 0 0; font-size: .67rem; color: var(--muted); text-align: center; }
+.form-shell { max-width: 880px; margin: 0 auto; }
+.form-panel { padding: 1.7rem; background: var(--paper); border: 1px solid var(--line); border-radius: 15px; box-shadow: 0 4px 16px #213c3304; }
+.form-section-heading { margin-bottom: 1.4rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+.form-section-heading h2 { font-size: 1rem; margin-bottom: .2rem; }
+.form-section-heading p { font-size: .76rem; color: var(--muted); margin-bottom: 0; }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.3rem 1.4rem; }
+.field { min-width: 0; }
+label { display: block; margin-bottom: .45rem; font-size: .8rem; font-weight: 600; }
+input, select { display: block; width: 100%; min-width: 0; min-height: 52px; border: 1px solid #bdcbbd; border-radius: 9px; background: #fffefa; color: var(--text); padding: .7rem .8rem; font-size: .9rem; }
+input:hover, select:hover { border-color: #7c947c; }
+input::placeholder { color: #788279; }
+select { appearance: none; padding-right: 2.2rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234e6655' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right .8rem center; background-size: 16px; background-repeat: no-repeat; }
+.field-error input, .field-error select { border-color: #b9442d; }
+[role=alert] { margin-top: .45rem; color: #a03927; font-size: .76rem; }
+.form-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 1rem; margin-top: 1.7rem; padding-top: 1.3rem; border-top: 1px solid var(--line); }
+.form-actions a { display: inline-flex; align-items: center; min-height: 44px; padding: .3rem .5rem; margin-right: auto; color: var(--muted); font-size: .8rem; text-decoration: none; }
+.form-actions a:hover { color: var(--ink); }
+.auth-shell { max-width: 470px; margin: 2.5rem auto; }
+.auth-panel { padding: 2rem; background: var(--paper); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 12px 35px #213c3307; }
+.auth-panel h1 { font-size: 1.9rem; }
+.auth-panel .intro { font-size: .85rem; margin-bottom: 1.7rem; }
+.auth-panel .field { margin-bottom: 1.2rem; }
+.auth-panel button { margin-top: .3rem; width: 100%; }
+.auth-error { margin-bottom: 1.2rem; padding: .75rem .9rem; border: 1px solid #edc9b9; background: #fff1e9; border-radius: 9px; }
+.status-panel { max-width: 540px; margin: 3rem auto; padding: 2.5rem 2rem; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; text-align: center; }
+.status-panel h1 { max-width: none; font-size: 2rem; }
+.status-panel .intro { margin-bottom: 1.5rem; }
+.site-footer { max-width: 1340px; margin: auto; padding: 1rem 2rem 1.5rem; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: .67rem; }
+.footer-brand { color: var(--ink); font-weight: 750; letter-spacing: .08em; }
+.skip-link { position: absolute; z-index: 10; left: 1rem; top: -100px; padding: .7rem 1rem; background: var(--ink); color: white; border-radius: 8px; }
+.skip-link:focus { top: .8rem; }
+@media (min-width: 1250px) { .category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { .catalog-layout { grid-template-columns: minmax(0, 1fr) 300px; gap: 1.2rem; } .header-inner, .app-shell, .site-footer { padding-left: 1.3rem; padding-right: 1.3rem; } }
+@media (max-width: 760px) { .catalog-layout { grid-template-columns: 1fr; gap: 1.5rem; } .cart-panel { position: static; } .cart-items { max-height: none; } .app-shell { padding-top: 1.7rem; } .header-inner { min-height: 80px; } .page-heading { margin-bottom: 1.5rem; } .header-links { gap: 1rem; } .auth-shell { margin-top: 1rem; } }
+@media (max-width: 480px) { html { font-size: 17px; } .header-inner, .app-shell, .site-footer { padding-left: 1rem; padding-right: 1rem; } .brand-description { font-size: .58rem; } .header-links .catalog-nav { display: none; } .header-links .cart-link { padding: .4rem .6rem; } .category-grid { gap: .65rem; } .category-card a { min-height: 170px; padding: 1rem .85rem; } .category-card h3 { font-size: .88rem; } .category-card a::after { right: .7rem; top: .8rem; } .field-grid { grid-template-columns: 1fr; gap: 1.15rem; } .form-panel, .auth-panel { padding: 1.2rem; } .form-actions button { width: 100%; } .form-actions a { width: 100%; justify-content: center; order: 1; } .breadcrumbs { gap: .45rem; margin-bottom: .8rem; } .status-panel { padding: 2rem 1.2rem; } }
+@media (max-width: 340px) { .category-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="/" aria-label="POT home">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span><span class="brand-name">POT</span><span class="brand-description">Parts Ordering Tool</span></span>
+    </a>
+  </div>
+</header>
+<main id="main" class="app-shell">
 `
 
-const pageEnd = `</body></html>`
+const pageEnd = `</main>
+<footer class="site-footer"><span class="footer-brand">POT</span><span>Parts. Equipment. Ready for the job.</span></footer>
+</body></html>`
 
 var indexTemplate = template.Must(template.New("index").Funcs(template.FuncMap{
-	"formatPart": formatPart,
+	"partName":    func(p part) string { return readableName(reflect.TypeOf(p).Name()) },
+	"partDetails": func(p part) string { return formatPartFields(p, true) },
 }).Parse(pageStart + `
 {{if .Selected}}
-<nav aria-label="Navigation"><a href="/">All categories</a> · <a href="#cart">Cart</a></nav>
-<h1>{{.Selected.Name}}</h1>
-<nav aria-label="Parts">
-{{range .Selected.Parts}}<div><a href="{{.URL}}">{{.Name}}</a></div>{{else}}<p>No parts added yet.</p>{{end}}
+<nav class="breadcrumbs" aria-label="Navigation"><a href="/">← All categories</a><span aria-hidden="true">/</span><a href="#cart">Order cart</a></nav>
+<div class="page-heading"><p class="eyebrow">Parts &amp; equipment</p><h1>{{.Selected.Name}}</h1><p class="intro">{{if eq .Selected.ID "project-locations"}}Add the job site and delivery instructions to your order.{{else}}Choose an item, select your specifications, and add it to your order.{{end}}</p></div>
+{{end}}
+<div class="catalog-layout">
+<section class="catalog-content" aria-label="Catalog">
+{{if .Selected}}
+<div class="section-heading"><h2>Available items</h2><span>{{len .Selected.Parts}} choices</span></div>
+<nav class="part-list" aria-label="Parts">
+{{range .Selected.Parts}}<div class="part-link"><a aria-label="{{.Name}}" href="{{.URL}}">{{.Name}}</a></div>{{else}}<p>No parts added yet.</p>{{end}}
 </nav>
 {{else}}
-<h1>Part categories</h1>
-<nav aria-label="Categories">
-{{range .Categories}}<div><a href="/?category={{.ID}}">{{.Name}}</a></div>{{end}}
+<nav class="category-grid" aria-label="Categories">
+{{range .Categories}}<div class="category-card"><a aria-label="{{.Name}}" href="/?category={{.ID}}"><h3>{{.Name}}</h3><span class="category-count">{{len .Parts}} {{if eq (len .Parts) 1}}item{{else}}items{{end}}</span></a></div>{{end}}
 </nav>
 {{end}}
-<section id="cart">
-<h2>Cart</h2>
-{{range $index, $item := .Items}}
-<form action="/remove" method="post"><p>{{formatPart $item}}
-  <button type="submit" name="index" value="{{$index}}">delete</button>
-</p></form>
-{{else}}<p>Your cart is empty.</p>{{end}}
-{{if .Items}}<form action="/submit" method="post"><button type="submit">submit order</button></form>{{end}}
 </section>
+<section id="cart" class="cart-panel" aria-labelledby="cart-title">
+<div class="cart-heading"><h2 id="cart-title">Order cart</h2><span class="badge" aria-label="{{len .Items}} items in cart">{{len .Items}}</span></div>
+{{if .Items}}<ul class="cart-items">
+{{range $index, $item := .Items}}
+<li class="cart-item"><h3>{{partName $item}}</h3><p class="cart-description">{{partDetails $item}}</p>
+<form action="/remove" method="post"><button class="remove-button" type="submit" name="index" value="{{$index}}" aria-label="Remove {{partName $item}} from cart">Remove</button></form></li>
+{{end}}
+</ul><div class="cart-footer"><form action="/submit" method="post"><button type="submit">Submit order <span aria-hidden="true">→</span></button></form><p>Review your items before submitting.</p></div>
+{{else}}<div class="cart-empty"><div class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 9-4 9 4v11l-9 4-9-4V7Z"/><path d="m3 7 9 4 9-4M12 11v11M7.5 5l9 4"/></svg></div><h3>Your cart is empty.</h3><p>Add items from the catalog and they’ll appear here.</p></div>{{end}}
+</section>
+</div>
 ` + pageEnd))
 
 var partTemplate = template.Must(template.New("part").Parse(pageStart + `
-<nav aria-label="Navigation"><a href="/">Categories &amp; cart</a></nav>
-<h1>{{.PartName}}</h1>
-<form action="{{.Target}}" method="post">
+<div class="form-shell">
+<nav class="breadcrumbs" aria-label="Navigation"><a href="/">← All categories</a><span aria-hidden="true">/</span><a href="/#cart">Order cart</a></nav>
+<div class="page-heading"><p class="eyebrow">Add to your order</p><h1>{{.PartName}}</h1><p class="intro">{{if eq .PartName "Project Location"}}Enter the project name, address, and any delivery instructions.{{else}}Set your specifications and quantity below.{{end}}</p></div>
+<form class="form-panel" action="{{.Target}}" method="post">
+<div class="form-section-heading"><h2>{{if eq .PartName "Project Location"}}Location details{{else}}Item details{{end}}</h2><p>All fields are required unless marked optional.</p></div>
+<div class="field-grid">
 {{range .Fields}}
-<div>
+<div class="field{{if .Error}} field-error{{end}}">
   <label for="{{.Name}}">{{.Label}}{{if .Optional}} (optional){{end}}</label>
   {{if .Choices}}
-  <select id="{{.Name}}" name="{{.Name}}"{{if not .Optional}} required{{end}}>
-    {{if .Optional}}<option value=""></option>{{end}}
+  <select id="{{.Name}}" name="{{.Name}}"{{if .Error}} aria-invalid="true" aria-describedby="{{.Name}}-error"{{end}}{{if not .Optional}} required{{end}}>
+    {{if .Optional}}<option value="">Not specified</option>{{else}}<option value="" disabled{{if eq .Value ""}} selected{{end}}>Select an option</option>{{end}}
     {{$value := .Value}}{{range .Choices}}
     <option value="{{.}}" {{if eq $value .}}selected{{end}}>{{.}}</option>
     {{end}}
   </select>
   {{else if .Text}}
-  <input type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if not .Optional}} required{{end}}>
+  <input type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Error}} aria-invalid="true" aria-describedby="{{.Name}}-error"{{end}}{{if not .Optional}} required{{end}}>
   {{else}}
-  <input type="number" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}" min="1"{{if not .Optional}} required{{end}}>
+  <input type="number" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}" min="1" placeholder="Enter {{.Label}}"{{if .Error}} aria-invalid="true" aria-describedby="{{.Name}}-error"{{end}}{{if not .Optional}} required{{end}}>
   {{end}}
-  {{with .Error}}<div role="alert">{{.}}</div>{{end}}
+  {{if .Error}}<div id="{{.Name}}-error" role="alert">{{.Error}}</div>{{end}}
 </div>
 {{end}}
-<button type="submit">save part</button>
+</div>
+<div class="form-actions"><a href="/">Cancel</a><button type="submit">Add to cart <span aria-hidden="true">+</span></button></div>
 </form>
-{{if .Initial}}
-<script>
-document.querySelectorAll('select').forEach(select => select.selectedIndex = -1);
-</script>
-{{end}}
+</div>
 ` + pageEnd))
 
 func partForm[T part](w http.ResponseWriter, r *http.Request) {
@@ -1665,9 +1838,12 @@ func partForm[T part](w http.ResponseWriter, r *http.Request) {
 			Optional: field.Tag.Get("optional") == "true",
 		}
 		if input.Label == "" {
-			input.Label = field.Name
+			input.Label = readableName(field.Name)
 		}
 		if input.Optional && value.Field(index).IsZero() {
+			input.Value = ""
+		}
+		if r.Method == http.MethodGet && value.Field(index).Kind() == reflect.Int && value.Field(index).IsZero() {
 			input.Value = ""
 		}
 		if r.Method == http.MethodPost {
@@ -1684,9 +1860,8 @@ func partForm[T part](w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := partTemplate.Execute(w, partFormData{
-		PartName: value.Type().Name(),
+		PartName: readableName(value.Type().Name()),
 		Target:   r.URL.Path, Fields: fields,
-		Initial: r.Method == http.MethodGet,
 	}); err != nil {
 		log.Println(err)
 	}
@@ -1722,14 +1897,31 @@ func requireLogin(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 	}
 }
-func login(w http.ResponseWriter, r *http.Request) {
+
+var loginTemplate = template.Must(template.New("login").Parse(pageStart + `
+<div class="auth-shell"><section class="auth-panel" aria-labelledby="login-title">
+<p class="eyebrow">Crew access</p><h1 id="login-title">Welcome back.</h1>
+<p class="intro">Sign in to put your next parts order together.</p>
+{{if .}}<div class="auth-error" role="alert">{{.}}</div>{{end}}
+<form method="post" action="/login">
+<div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" placeholder="Your username" required autofocus></div>
+<div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Your password" required></div>
+<button type="submit">Sign in <span aria-hidden="true">→</span></button>
+</form>
+</section></div>
+` + pageEnd))
+
+func renderLogin(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := loginTemplate.Execute(w, message); err != nil {
+		log.Println(err)
+	}
+}
+
+func login(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL.Path, r.Method, r.RemoteAddr)
-	io.WriteString(w, pageStart+`<form method="post" action="/login">
-	<input name="username" placeholder="username" required autofocus><br>
-        <input name="password" type="password" placeholder="password" required><br>
-        <button type="submit">login</button>
-    </form>`+pageEnd)
+	renderLogin(w, http.StatusOK, "")
 }
 
 func authenticate(users map[string]string) http.HandlerFunc {
@@ -1737,7 +1929,7 @@ func authenticate(users map[string]string) http.HandlerFunc {
 		log.Println(r.URL.Path, r.Method, r.RemoteAddr)
 		username := r.FormValue("username")
 		if password, ok := users[username]; !ok || password != r.FormValue("password") {
-			http.Error(w, "invalid login", http.StatusUnauthorized)
+			renderLogin(w, http.StatusUnauthorized, "The username or password is incorrect.")
 			return
 		}
 
@@ -1866,11 +2058,12 @@ func submit(recordOrder func(string, ...any) error) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		io.WriteString(w, pageStart+`
-			    <div>
-				<h1>sent</h1>
-				<a href="/">&larr; back</a>
-			    </div>
-			`+pageEnd)
+<section class="status-panel">
+<div class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></div>
+<p class="eyebrow">All set</p><h1>Order sent.</h1>
+<p class="intro">Your parts request has been submitted successfully.</p>
+<a class="button" href="/">Back to categories <span aria-hidden="true">→</span></a>
+</section>`+pageEnd)
 	}
 }
 
